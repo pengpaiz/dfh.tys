@@ -1,3 +1,4 @@
+# ---- 签名材料：绝不入库 ----
 *.p12
 *.pfx
 *.jks
@@ -5,29 +6,28 @@
 *.cer
 *.p7b
 build-profile.local.json5
-     # ---- 构建产物 / IDE 缓存 ----                                                                                              $0.97 spent                             
-     /node_modules                                                                                                                                                        
-     /oh_modules                                                                                                                  LSP                                     
-     /local.properties                                                                                                            LSPs are disabled                       
-     /.idea                                                                                                                                                               
-     **/build                                                                                                                                                             
-     /.hvigor                                                                                                                                                             
-     .cxx                                                                                                                                                                 
-     /.clangd                                                                                                                                                             
-     /.clang-format                                                                                                                                                       
-     /.clang-tidy                                                                                                                                                         
-     **/.test                                                                                                                                                             
-     /.appanalyzer                                                                                                                                                        
-     /.preview                                                                                                                                                            
-                                                                                                                                                                          
-     # ---- 签名材料：绝不入库 ----                                                                                                                                       
-     *.p12                                                                                                                                                                
-     *.pfx                                                                                                                                                                
-     *.jks                                                                                                                                                                
-     *.keystore                                                                                                                                                           
-     *.cer                                                                                                                                                                
-     *.p7b                                                                                                                                                                
-     build-profile.local.json5
-*.ets linguist-language=TypeScript
-tools/** linguist-vendored
-                                
+
+# ---- 构建产物 ----
+*.hap
+*.hsp
+*.app
+**/build
+**/.preview
+/.hvigor
+.cxx
+
+# ---- 依赖与本地配置 ----
+/node_modules
+/oh_modules
+/local.properties
+
+# ---- IDE 缓存 ----
+/.idea
+/.cache
+/.appanalyzer
+/.codeartsdoer
+/.merkle-snapshot.json
+/.clangd
+/.clang-format
+/.clang-tidy
+**/.test
