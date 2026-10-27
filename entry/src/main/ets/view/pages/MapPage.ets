@@ -9,6 +9,7 @@
  */
 
 import { WORLD_RINGS } from '../../domain/map/WorldOutline';
+import { common, ConfigurationConstant } from '@kit.AbilityKit';
 import { ENTER_SCALE, PRESS_IN_MS, PRESS_OUT_MS, PRESS_SCALE } from '../components/PressFx';
 import { KEY_BAR_CLEARANCE, TAB_BAR_CLEARANCE } from '../../common/LayoutMetrics';
 import { SatelliteApp } from '../../common/SatelliteApp';
@@ -46,7 +47,7 @@ const GRID_COLOR = '#1F3550';
 const STATION_COLOR = '#E53935';
 const TRACK_COLOR = '#FF4D4D';
 const LIVE_COLOR = '#F5C518';
-const FOOTPRINT_COLOR = '#4C8DFF';
+const FOOTPRINT_COLOR = '#538EF4';
 
 class MapSatInfo {
   catnum: number = 0;
@@ -66,30 +67,18 @@ class MapSatInfo {
   }
 }
 
-/** 详情面板数据项：@Prop 保证父组件每次重渲染（每秒）都同步最新数值。 */
-@Component
-struct MapInfoChip {
-  @Prop text: string = '';
-
-  build() {
-    Text(this.text)
-      .fontSize(12)
-      .fontColor($r('app.color.color_text'))
-      .padding({ left: 8, right: 8, top: 4, bottom: 4 })
-      .backgroundColor($r('app.color.color_bg'))
-      .borderRadius(6)
-      .layoutWeight(1)
-      .textAlign(TextAlign.Center)
-      .maxLines(1)
-      .textOverflow({ overflow: TextOverflow.Ellipsis })
-  }
-}
-
 @Component
 export struct MapPage {
   @State sats: MapSatInfo[] = [];
   @State selectedIndex: number = 0;
   @State nowTs: number = Date.now();
+  /**
+   * 信息胶囊文本（15 项）。
+   * 必须做成 @State：ArkUI 的 @Builder **按值传参不会随参数变化刷新**，
+   * 之前 `chip(this.azimuthText())` 因此每秒不更新（地图是命令式重绘所以看起来在动）。
+   */
+  @State chipValues: string[] = ['方位 --', '仰角 --', '高度 --', '距离 --', '速率 --', '速度 --',
+    '星下 --', 'QTH --', '下次 --', '周期 --', '倾角 --', '偏心率 --', '平近点角 --', 'NORAD --', '站址 --'];
   @State viewCenterLon: number = DEFAULT_CENTER_LON;
   @State viewCenterLat: number = DEFAULT_CENTER_LAT;
   @StorageLink('selected_version') @Watch('recompute') selVersion: number = 0;
@@ -98,6 +87,8 @@ export struct MapPage {
   @StorageLink('station_longitude') @Watch('recompute') stationLon: number = 16.37;
   @StorageLink('station_altitude') @Watch('recompute') stationAlt: number = 0;
   @StorageProp('current_tab') @Watch('onTabChanged') currentTab: number = TAB_MAP;
+  /** 当前激活的子页签（0=地图 / 1=日历）：地图并入「追踪」后靠它判断自身是否真的可见 */
+  @StorageProp('tracking_sub') @Watch('onTrackSubChanged') trackSub: number = 0;
 
   private dirty: boolean = false;
   @State pressedBtn: string = '';
@@ -107,6 +98,8 @@ export struct MapPage {
   /** 切换卫星时中间文字信息的切换动画：进度 0→1，方向 -1 上一颗 / +1 下一颗 */
   @State infoFx: number = 1;
   @State infoDir: number = 1;
+  /** 暗色主题：地图配色随之切换（白天/夜间两套） */
+  @State isDark: boolean = false;
   private app: SatelliteApp = SatelliteApp.getInstance();
   private finder: SatPassFinder = new SatPassFinder();
   private settings: RenderingContextSettings = new RenderingContextSettings(true);
@@ -115,12 +108,45 @@ export struct MapPage {
   private lastH: number = 0;
   private timerId: number = -1;
   private lastPassRefresh: number = 0;
+  /** 同一 (nowTs, catnum) 内复用当前位置：避免每个信息 chip 与地图绘制各传播一次轨道 */
+  private posCache: SatOrbitalPos | null = null;
+  private posCacheKeyTime: number = Number.NaN;
+  /** 地图配色：按亮/暗主题切换（白天=浅底深线，夜间=现有深色）。
+   *  方法统一加 map 前缀，避免与 ArkUI 内建属性（borderColor 等）撞名。 */
+  private mapWaterColor(): string {
+    return this.isDark ? WATER_COLOR : '#DCEBF7';
+  }
+  private mapLandColor(): string {
+    return this.isDark ? LAND_COLOR : '#F2F6FA';
+  }
+  private mapBorderColor(): string {
+    return this.isDark ? BORDER_COLOR : '#C7D6E6';
+  }
+  private mapGridColor(): string {
+    return this.isDark ? GRID_COLOR : '#E3EBF3';
+  }
+  private mapLiveColor(): string {
+    return this.isDark ? LIVE_COLOR : '#D9A400';
+  }
+  /** 标记描边：夜间用白边，白天用深边（保证在浅底上可见） */
+  private markerEdge(): string {
+    return this.isDark ? '#FFFFFF' : '#1B1C1E';
+  }
+
+  private posCacheKeyCat: number = -1;
 
   aboutToAppear(): void {
+    const ctx = getContext(this) as common.UIAbilityContext;
+    this.isDark = ctx.config.colorMode === ConfigurationConstant.ColorMode.COLOR_MODE_DARK;
     this.dirty = false;
     this.doRecompute();
     this.timerId = setInterval((): void => {
       this.nowTs = Date.now();
+      // 本页不可见（切到日历子页签或其它底部标签）时不做轨道传播与重绘：
+      // Tabs 切页不会销毁本页，定时器仍在每秒空转。
+      if (!this.isVisible()) {
+        return;
+      }
       this.refreshSelectedPass(false);
       this.refreshSelectedTrack();
       this.followSelectedSat();
@@ -145,8 +171,21 @@ export struct MapPage {
     this.doRecompute();
   }
 
+  /** 本页是否真的可见：既要在「追踪」标签上，子页签也必须是「地图」。 */
+  private isVisible(): boolean {
+    return this.currentTab === TAB_MAP && this.trackSub === 0;
+  }
+
   onTabChanged(): void {
-    if (this.currentTab === TAB_MAP && this.dirty) {
+    if (this.isVisible() && this.dirty) {
+      this.dirty = false;
+      this.doRecompute();
+    }
+  }
+
+  /** 在「追踪」内切回地图子页签：有待算内容就立即重算。 */
+  onTrackSubChanged(): void {
+    if (this.isVisible() && this.dirty) {
       this.dirty = false;
       this.doRecompute();
     }
@@ -356,13 +395,23 @@ export struct MapPage {
   private currentPosition(): SatOrbitalPos | null {
     const info = this.selectedSat();
     if (info === null) {
+      this.posCache = null;
       return null;
+    }
+    // 同一帧内多个信息 chip 与地图绘制都要用位置，按 (nowTs, catnum) 复用，只传播一次。
+    if (this.posCache !== null && this.posCacheKeyTime === this.nowTs && this.posCacheKeyCat === info.catnum) {
+      return this.posCache;
     }
     const station = AppSettings.getStation();
     try {
-      return info.obj.getFullPosition(station, this.nowTs);
+      const pos = info.obj.getFullPosition(station, this.nowTs);
+      this.posCache = pos;
+      this.posCacheKeyTime = this.nowTs;
+      this.posCacheKeyCat = info.catnum;
+      return pos;
     } catch (e) {
       hilog.warn(0x0001, 'MapPage', `pos fail ${info.name}`);
+      this.posCache = null;
       return null;
     }
   }
@@ -408,6 +457,8 @@ export struct MapPage {
   // ---- drawing ----
 
   private drawNow(): void {
+    // 每帧刷新信息胶囊文本（@Builder 按值传参不刷新，故文本统一走 @State 数组）
+    this.refreshChipValues();
     if (this.lastW > 0 && this.lastH > 0) {
       this.drawCanvas(this.lastW, this.lastH);
     }
@@ -417,6 +468,9 @@ export struct MapPage {
     if (width <= 0 || height <= 0) {
       return;
     }
+    // 每秒重绘时同步主题：白天/夜间切换后地图配色自动跟随
+    const ctx = getContext(this) as common.UIAbilityContext;
+    this.isDark = ctx.config.colorMode === ConfigurationConstant.ColorMode.COLOR_MODE_DARK;
     try {
       this.renderCanvas(width, height);
     } catch (e) {
@@ -427,12 +481,12 @@ export struct MapPage {
   private renderCanvas(width: number, height: number): void {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, width, height);
-    ctx.fillStyle = WATER_COLOR;
+    ctx.fillStyle = this.mapWaterColor();
     ctx.fillRect(0, 0, width, height);
     this.drawGrid(ctx, width, height);
 
-    ctx.fillStyle = LAND_COLOR;
-    ctx.strokeStyle = BORDER_COLOR;
+    ctx.fillStyle = this.mapLandColor();
+    ctx.strokeStyle = this.mapBorderColor();
     ctx.lineWidth = 1;
     for (let i = 0; i < WORLD_RINGS.length; i++) {
       this.traceRing(ctx, WORLD_RINGS[i], width, height);
@@ -476,8 +530,8 @@ export struct MapPage {
       const y = this.py(lat, height);
       const selected = i === this.selectedIndex;
       ctx.save();
-      ctx.fillStyle = selected ? LIVE_COLOR : sat.color;
-      ctx.strokeStyle = '#FFFFFF';
+      ctx.fillStyle = selected ? this.mapLiveColor() : sat.color;
+      ctx.strokeStyle = this.markerEdge();
       ctx.lineWidth = selected ? 2 : 1;
       ctx.beginPath();
       ctx.arc(x, y, selected ? 6 : 4, 0, Math.PI * 2);
@@ -493,7 +547,7 @@ export struct MapPage {
     const sy = this.py(station.latitude, height);
     ctx.save();
     ctx.fillStyle = STATION_COLOR;
-    ctx.strokeStyle = '#FFFFFF';
+    ctx.strokeStyle = this.markerEdge();
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(sx, sy, 5, 0, Math.PI * 2);
@@ -603,7 +657,7 @@ export struct MapPage {
 
   private drawGrid(ctx: CanvasRenderingContext2D, width: number, height: number): void {
     ctx.save();
-    ctx.strokeStyle = GRID_COLOR;
+    ctx.strokeStyle = this.mapGridColor();
     ctx.lineWidth = 1;
     ctx.globalAlpha = 0.6;
     for (let lon = -180; lon <= 180; lon += 30) {
@@ -736,10 +790,6 @@ export struct MapPage {
     return `站 ${this.stationLat.toFixed(2)}, ${this.stationLon.toFixed(2)}`;
   }
 
-  private stationQthText(): string {
-    return `站QTH ${positionToQth(this.stationLat, this.stationLon) ?? '--'}`;
-  }
-
   private rateText(): string {
     const pos = this.currentPosition();
     return pos === null ? '距变 --' : `距变 ${pos.distanceRate.toFixed(2)}km/s`;
@@ -748,16 +798,6 @@ export struct MapPage {
   private velocityText(): string {
     const pos = this.currentPosition();
     return pos === null ? '速度 --' : `速度 ${pos.getOrbitalVelocity().toFixed(2)}km/s`;
-  }
-
-  private shadowText(): string {
-    const pos = this.currentPosition();
-    return pos === null ? '光照 --' : (pos.eclipsed ? '地影中' : '光照中');
-  }
-
-  private statusText(): string {
-    const pos = this.currentPosition();
-    return pos === null ? '状态 --' : (pos.aboveHorizon ? '地平线上' : '地平线下');
   }
 
   private periodText(): string {
@@ -812,7 +852,7 @@ export struct MapPage {
       this.infoFx = 0;
     });
     setTimeout((): void => {
-      this.getUIContext().animateTo({ duration: 320, curve: Curve.Friction }, (): void => {
+      this.getUIContext().animateTo({ duration: 200, curve: Curve.EaseOut }, (): void => {
         this.infoFx = 1;
       });
     }, 0);
@@ -826,11 +866,11 @@ export struct MapPage {
 
   private onBtnTouch(key: string, event: TouchEvent): void {
     if (event.type === TouchType.Down) {
-      this.getUIContext().animateTo({ duration: PRESS_IN_MS, curve: Curve.Friction }, (): void => {
+      this.getUIContext().animateTo({ duration: PRESS_IN_MS, curve: Curve.EaseOut }, (): void => {
         this.pressedBtn = key;
       });
     } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
-      this.getUIContext().animateTo({ duration: PRESS_OUT_MS, curve: Curve.Friction }, (): void => {
+      this.getUIContext().animateTo({ duration: PRESS_OUT_MS, curve: Curve.EaseOut }, (): void => {
         if (this.pressedBtn === key) {
           this.pressedBtn = '';
         }
@@ -847,9 +887,9 @@ export struct MapPage {
           .type(ButtonType.Circle)
           .width(40)
           .height(40)
-          .fontSize(20)
-          .fontColor(Color.White)
-          .backgroundColor($r('app.color.color_primary'))
+          .fontSize(18)
+          .fontColor($r('app.color.cc_on_primary'))
+          .backgroundColor($r('app.color.cc_primary'))
           .enabled(this.sats.length > 0)
           .scale({ x: this.pressScale('map-prev'), y: this.pressScale('map-prev') })
           .onTouch((event: TouchEvent): void => {
@@ -860,20 +900,20 @@ export struct MapPage {
           })
         Column({ space: 2 }) {
           Text(this.maybeName())
-            .fontSize(16)
+            .fontSize(14)
             .fontWeight(FontWeight.Bold)
-            .fontColor($r('app.color.color_text'))
+            .fontColor($r('app.color.cc_text_title'))
             .maxLines(2)
             .textAlign(TextAlign.Center)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
           Row({ space: 4 }) {
             Text(this.countdownHint())
-              .fontSize(11)
-              .fontColor($r('app.color.color_text_secondary'))
+              .fontSize(12)
+              .fontColor($r('app.color.cc_text_muted'))
             Text(this.countdownLabel())
-              .fontSize(13)
+              .fontSize(14)
               .fontWeight(FontWeight.Bold)
-              .fontColor($r('app.color.color_primary'))
+              .fontColor($r('app.color.cc_accent_text'))
           }
         }
         .layoutWeight(1)
@@ -886,9 +926,9 @@ export struct MapPage {
           .type(ButtonType.Circle)
           .width(40)
           .height(40)
-          .fontSize(20)
-          .fontColor(Color.White)
-          .backgroundColor($r('app.color.color_primary'))
+          .fontSize(18)
+          .fontColor($r('app.color.cc_on_primary'))
+          .backgroundColor($r('app.color.cc_primary'))
           .enabled(this.sats.length > 0)
           .scale({ x: this.pressScale('map-next'), y: this.pressScale('map-next') })
           .onTouch((event: TouchEvent): void => {
@@ -902,7 +942,7 @@ export struct MapPage {
       // 收窄左右留白，给过长的卫星名留出更多宽度
       .padding({ left: 8, right: 8, top: 8, bottom: 0 })
       .onAppear((): void => {
-        this.getUIContext().animateTo({ duration: PRESS_OUT_MS, curve: Curve.Friction }, (): void => {
+        this.getUIContext().animateTo({ duration: PRESS_OUT_MS, curve: Curve.EaseOut }, (): void => {
           this.btnEntered = true;
         });
       })
@@ -932,122 +972,91 @@ export struct MapPage {
           })
       }
       .width('100%')
+      // 回退：地图恢复原比例
       .aspectRatio(1.25)
       .clip(true)
 
-      // 详情面板：按类别分组、组间留白、等分铺满任务栏以上区域（不滚动）
-      Column({ space: 8 }) {
-        // 当前卫星
-        Row({ space: 8 }) {
-          Circle({ width: 10, height: 10 }).fill(this.maybeColor())
-          Text(this.maybeName())
-            .fontSize(15)
-            .fontWeight(FontWeight.Bold)
-            .fontColor($r('app.color.color_text'))
-            .layoutWeight(1)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-        }
-        .width('100%')
+      // 详情面板：3 列等宽胶囊网格（不滚动，一屏显示完整）
+      Column() {
+        Column({ space: 8 }) {
+            // —— 数据网格：3 列等宽，短项 2+1，长项通栏 ——
+Grid() {
+              GridItem() {
+                this.chip(0)
+              }.columnStart(0).columnEnd(0)
+              GridItem() {
+                this.chip(1)
+              }.columnStart(1).columnEnd(1)
+              GridItem() {
+                this.chip(2)
+              }.columnStart(2).columnEnd(2)
 
-        // 组 1：位置与指向
-        Column({ space: 5 }) {
-          Text('位置与指向')
-            .fontSize(11)
-            .fontColor($r('app.color.color_text_secondary'))
-          Row({ space: 6 }) {
-            MapInfoChip({ text: this.azimuthText() })
-            MapInfoChip({ text: this.elevationText() })
-            MapInfoChip({ text: this.rangeText() })
-          }
-          .width('100%')
-          Row({ space: 6 }) {
-            MapInfoChip({ text: this.altitudeText() })
-            MapInfoChip({ text: `星下 ${this.posText()}` })
-          }
-          .width('100%')
-        }
-        .layoutWeight(1)
-        .width('100%')
-        .justifyContent(FlexAlign.Center)
-        .alignItems(HorizontalAlign.Start)
+              GridItem() {
+                this.chip(3)
+              }.columnStart(0).columnEnd(0)
+              GridItem() {
+                this.chip(4)
+              }.columnStart(1).columnEnd(1)
+              GridItem() {
+                this.chip(5)
+              }.columnStart(2).columnEnd(2)
 
-        // 组 2：运动与光照
-        Column({ space: 5 }) {
-          Text('运动与光照')
-            .fontSize(11)
-            .fontColor($r('app.color.color_text_secondary'))
-          Row({ space: 6 }) {
-            MapInfoChip({ text: this.rateText() })
-            MapInfoChip({ text: this.velocityText() })
-          }
-          .width('100%')
-          Row({ space: 6 }) {
-            MapInfoChip({ text: `相位 ${this.phaseText()}` })
-            MapInfoChip({ text: this.shadowText() })
-            MapInfoChip({ text: this.statusText() })
-          }
-          .width('100%')
-        }
-        .layoutWeight(1)
-        .width('100%')
-        .justifyContent(FlexAlign.Center)
-        .alignItems(HorizontalAlign.Start)
+              GridItem() {
+                this.chip(6)
+              }.columnStart(0).columnEnd(2)
 
-        // 组 3：轨道参数
-        Column({ space: 5 }) {
-          Text('轨道参数')
-            .fontSize(11)
-            .fontColor($r('app.color.color_text_secondary'))
-          Row({ space: 6 }) {
-            MapInfoChip({ text: this.periodText() })
-            MapInfoChip({ text: this.inclText() })
-            MapInfoChip({ text: this.eccnText() })
-          }
-          .width('100%')
-          Row({ space: 6 }) {
-            MapInfoChip({ text: this.meanmoText() })
-            MapInfoChip({ text: this.noradText() })
-          }
-          .width('100%')
-        }
-        .layoutWeight(1)
-        .width('100%')
-        .justifyContent(FlexAlign.Center)
-        .alignItems(HorizontalAlign.Start)
+              GridItem() {
+                this.chip(7)
+              }.columnStart(0).columnEnd(1)
+              GridItem() {
+                this.chip(8)
+              }.columnStart(2).columnEnd(2)
 
-        // 组 4：站址与过境
-        Column({ space: 5 }) {
-          Text('站址与过境')
-            .fontSize(11)
-            .fontColor($r('app.color.color_text_secondary'))
-          Row({ space: 6 }) {
-            MapInfoChip({ text: this.stationText() })
-            MapInfoChip({ text: `QTH ${this.qthText()}` })
+              GridItem() {
+                this.chip(9)
+              }.columnStart(0).columnEnd(0)
+              GridItem() {
+                this.chip(10)
+              }.columnStart(1).columnEnd(1)
+              GridItem() {
+                this.chip(11)
+              }.columnStart(2).columnEnd(2)
+
+              GridItem() {
+                this.chip(12)
+              }.columnStart(0).columnEnd(0)
+              GridItem() {
+                this.chip(13)
+              }.columnStart(1).columnEnd(1)
+              GridItem() {
+                this.chip(14)
+              }.columnStart(2).columnEnd(2)
+            }
+            .columnsTemplate('1fr 1fr 1fr')
+            // 6 行等分面板可用高度：胶囊随可用空间自适应，不会被裁
+            .rowsTemplate('1fr 1fr 1fr 1fr 1fr 1fr')
+            .height('100%')
+            .columnsGap(6)
+            .rowsGap(6)
+            // 数据区不允许滑动、也不显示滚动条
+            .scrollBar(BarState.Off)
+            .edgeEffect(EdgeEffect.None)
+            .enableScrollInteraction(false)
+            .width('100%')
           }
-          .width('100%')
-          Row({ space: 6 }) {
-            MapInfoChip({ text: this.stationQthText() })
-            MapInfoChip({ text: this.nextPassShort() })
-          }
-          .width('100%')
-        }
-        .layoutWeight(1)
         .width('100%')
-        .justifyContent(FlexAlign.Center)
-        .alignItems(HorizontalAlign.Start)
+        .layoutWeight(1)
       }
       .layoutWeight(1)
       .width('100%')
-      // 底部留出悬浮胶囊栏的空间，内容铺满到栏以上
-      .padding({ left: 12, right: 12, top: 12, bottom: this.barClearance })
-      .backgroundColor($r('app.color.color_card'))
+      .padding({ left: 10, right: 10, top: 10, bottom: this.barClearance + 10 })
       .borderRadius(12)
+      .border({ width: 1, color: $r('app.color.cc_border'), radius: 12 })
       .alignItems(HorizontalAlign.Start)
     }
     .width('100%')
     .height('100%')
-    .backgroundColor($r('app.color.color_bg'))
+    .backgroundColor($r('app.color.cc_page_bg'))
   }
 
   private nextPassShort(): string {
@@ -1061,11 +1070,6 @@ export struct MapPage {
   private maybeName(): string {
     const info = this.selectedSat();
     return info === null ? '地图' : info.name;
-  }
-
-  private maybeColor(): string {
-    const info = this.selectedSat();
-    return info === null ? '#E67E22' : info.color;
   }
 
   private azimuthText(): string {
@@ -1086,5 +1090,67 @@ export struct MapPage {
   private rangeText(): string {
     const pos = this.currentPosition();
     return pos === null ? '距离 --' : `距离 ${pos.distance.toFixed(0)}km`;
+  }
+
+  /** 胶囊文本的“标签”部分 */
+  private chipLabelOf(i: number): string {
+    const t = this.chipValues.length > i ? this.chipValues[i] : '';
+    const s = t.indexOf(' ');
+    return s >= 0 ? t.substring(0, s) : t;
+  }
+
+  /** 胶囊文本的“值”部分 */
+  private chipValueOf(i: number): string {
+    const t = this.chipValues.length > i ? this.chipValues[i] : '';
+    const s = t.indexOf(' ');
+    return s >= 0 ? t.substring(s + 1) : '';
+  }
+
+  /** 刷新 15 个信息胶囊文本（每秒随定时器调用，保证实时）。 */
+  private refreshChipValues(): void {
+    this.chipValues = [
+      this.azimuthText(),
+      this.elevationText(),
+      this.altitudeText(),
+      this.rangeText(),
+      this.rateText(),
+      this.velocityText(),
+      `星下 ${this.posText()}`,
+      `QTH ${this.qthText()}`,
+      this.nextPassShort(),
+      this.periodText(),
+      this.inclText(),
+      this.eccnText(),
+      this.meanmoText(),
+      this.noradText(),
+      this.stationText()
+    ];
+  }
+
+  /** 等宽胶囊：绑定 @State 文本（index 为常量，规避 @Builder 按值传参不刷新的限制）。 */
+  @Builder
+  private chip(index: number) {
+    Column({ space: 1 }) {
+      Text(this.chipLabelOf(index))
+        .fontSize(11)
+        .fontColor($r('app.color.cc_text_muted'))
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+      Text(this.chipValueOf(index))
+        .fontSize(13)
+        .fontWeight(FontWeight.Medium)
+        .fontColor($r('app.color.cc_text_title'))
+        .fontFeature('"tnum" 1')
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+    }
+    .width('100%')
+    .height('100%')
+    .constraintSize({ minHeight: 30 })
+    .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Center)
+    .padding({ left: 4, right: 4 })
+    .backgroundColor($r('app.color.cc_surface_muted'))
+    .borderRadius(8)
   }
 }

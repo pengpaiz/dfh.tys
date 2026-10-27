@@ -3,8 +3,7 @@
  * Ported to HarmonyOS ArkTS from the Android Kotlin original (GPL-3.0).
  */
 
-import { EARTH_RADIUS, SPEED_OF_LIGHT, DEG2RAD, RAD2DEG } from './Constants';
-import { SatGeoPos } from './GeoPos';
+import { SPEED_OF_LIGHT } from './Constants';
 
 const GM_EARTH = 3.986004418E14;
 const EARTH_RADIUS_M = 6.37E6;
@@ -51,22 +50,5 @@ export class SatOrbitalPos {
   getOrbitalVelocity(): number {
     const radius = EARTH_RADIUS_M + this.altitude * 1000.0;
     return Math.sqrt(GM_EARTH / radius) / 1000.0;
-  }
-
-  getRangeCircle(): SatGeoPos[] {
-    const pointCount = 721;
-    const rangeCirclePoints: SatGeoPos[] = [];
-    const beta = Math.acos(EARTH_RADIUS / (EARTH_RADIUS + this.altitude));
-    const sinLat = Math.sin(this.latitude);
-    const cosLat = Math.cos(this.latitude);
-    const cosBeta = Math.cos(beta);
-    const sinBeta = Math.sin(beta);
-    for (let azimuth = 0; azimuth <= 720; azimuth++) {
-      const rads = azimuth * DEG2RAD;
-      const lat = Math.asin(sinLat * cosBeta + cosLat * sinBeta * Math.cos(rads));
-      const lon = this.longitude + Math.atan2(Math.sin(rads) * sinBeta * cosLat, cosBeta - sinLat * Math.sin(lat));
-      rangeCirclePoints.push(new SatGeoPos(lat * RAD2DEG, lon * RAD2DEG));
-    }
-    return rangeCirclePoints;
   }
 }

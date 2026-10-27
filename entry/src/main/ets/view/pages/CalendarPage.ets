@@ -20,7 +20,8 @@ enum CalViewState {
   EMPTY = 2
 }
 
-const TAB_CALENDAR = 3;
+/** 本页所在的底部标签：日历已并入「追踪」页（顶部子页签），故与地图同属标签 1 */
+const TAB_CALENDAR = 1;
 /** 切到日历页后延后多久开始重算（让入场动画先跑完，避免抢主线程） */
 const CALC_START_DELAY_MS = 360;
 /** 每算完一颗星让出多久：给渲染一帧的时间，保证滚动/动画不卡 */
@@ -87,6 +88,8 @@ export struct CalendarPage {
   @StorageLink('station_longitude') @Watch('recompute') stationLon: number = 16.37;
   @StorageLink('station_altitude') @Watch('recompute') stationAlt: number = 0;
   @StorageProp('current_tab') @Watch('onTabChanged') currentTab: number = TAB_CALENDAR;
+  /** 当前激活的子页签（0=地图 / 1=日历）：日历并入「追踪」后靠它判断自身是否真的可见 */
+  @StorageProp('tracking_sub') @Watch('onTrackSubChanged') trackSub: number = 1;
 
   private dirty: boolean = false;
   @State pressedBtn: string = '';
@@ -136,9 +139,14 @@ export struct CalendarPage {
     this.scheduleCompute();
   }
 
+  /** 本页是否真的可见：既要在「追踪」标签上，子页签也必须是「日历」。 */
+  private isVisible(): boolean {
+    return this.currentTab === TAB_CALENDAR && this.trackSub === 1;
+  }
+
   /** 本页不可见时只记脏标记：14 天预报很贵，切到日历页再算。 */
   recompute(): void {
-    if (this.currentTab !== TAB_CALENDAR) {
+    if (!this.isVisible()) {
       this.dirty = true;
       return;
     }
@@ -157,7 +165,7 @@ export struct CalendarPage {
   }
 
   onTabChanged(): void {
-    if (this.currentTab === TAB_CALENDAR) {
+    if (this.isVisible()) {
       if (this.dirty) {
         this.dirty = false;
         this.scheduleCompute();
@@ -167,6 +175,14 @@ export struct CalendarPage {
       clearTimeout(this.pendingCalcId);
       this.pendingCalcId = -1;
       this.dirty = true;
+    }
+  }
+
+  /** 在「追踪」内切换子页签：切到日历且有待算内容时立即重算，避免显示上一次的旧数据。 */
+  onTrackSubChanged(): void {
+    if (this.isVisible()) {
+      this.dirty = false;
+      this.recompute();
     }
   }
 
@@ -180,7 +196,7 @@ export struct CalendarPage {
     }
     this.pendingCalcId = setTimeout((): void => {
       this.pendingCalcId = -1;
-      if (this.currentTab !== TAB_CALENDAR) {
+      if (!this.isVisible()) {
         this.dirty = true;
         return;
       }
@@ -507,7 +523,7 @@ export struct CalendarPage {
       this.gridFx = 0;
     });
     setTimeout((): void => {
-      this.getUIContext().animateTo({ duration: 320, curve: Curve.Friction }, (): void => {
+      this.getUIContext().animateTo({ duration: 200, curve: Curve.EaseOut }, (): void => {
         this.gridFx = 1;
       });
     }, 0);
@@ -521,11 +537,11 @@ export struct CalendarPage {
 
   private onBtnTouch(key: string, event: TouchEvent): void {
     if (event.type === TouchType.Down) {
-      this.getUIContext().animateTo({ duration: PRESS_IN_MS, curve: Curve.Friction }, (): void => {
+      this.getUIContext().animateTo({ duration: PRESS_IN_MS, curve: Curve.EaseOut }, (): void => {
         this.pressedBtn = key;
       });
     } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
-      this.getUIContext().animateTo({ duration: PRESS_OUT_MS, curve: Curve.Friction }, (): void => {
+      this.getUIContext().animateTo({ duration: PRESS_OUT_MS, curve: Curve.EaseOut }, (): void => {
         if (this.pressedBtn === key) {
           this.pressedBtn = '';
         }
@@ -545,9 +561,9 @@ export struct CalendarPage {
     }
     .width('100%')
     .height('100%')
-    .backgroundColor($r('app.color.color_bg'))
+    .backgroundColor($r('app.color.cc_page_bg'))
     .onAppear((): void => {
-      this.getUIContext().animateTo({ duration: PRESS_OUT_MS, curve: Curve.Friction }, (): void => {
+      this.getUIContext().animateTo({ duration: PRESS_OUT_MS, curve: Curve.EaseOut }, (): void => {
         this.btnEntered = true;
       });
     })
@@ -561,9 +577,9 @@ export struct CalendarPage {
           .type(ButtonType.Circle)
           .width(32)
           .height(32)
-          .fontSize(16)
-          .fontColor(Color.White)
-          .backgroundColor($r('app.color.color_primary'))
+          .fontSize(14)
+          .fontColor($r('app.color.cc_on_primary'))
+          .backgroundColor($r('app.color.cc_primary'))
           .enabled(this.canPrev())
           .opacity(this.canPrev() ? 1 : 0.35)
           .scale({ x: this.pressScale('cal-prev'), y: this.pressScale('cal-prev') })
@@ -574,9 +590,9 @@ export struct CalendarPage {
             this.prevMonth()
           })
         Text(this.monthTitle())
-          .fontSize(17)
+          .fontSize(18)
           .fontWeight(FontWeight.Bold)
-          .fontColor($r('app.color.color_text'))
+          .fontColor($r('app.color.cc_text_title'))
           .layoutWeight(1)
           // 月份标题与网格同步按方向滑入淡入
           .opacity(0.15 + 0.85 * this.gridFx)
@@ -586,9 +602,9 @@ export struct CalendarPage {
           .type(ButtonType.Circle)
           .width(32)
           .height(32)
-          .fontSize(16)
-          .fontColor(Color.White)
-          .backgroundColor($r('app.color.color_primary'))
+          .fontSize(14)
+          .fontColor($r('app.color.cc_on_primary'))
+          .backgroundColor($r('app.color.cc_primary'))
           .enabled(this.canNext())
           .opacity(this.canNext() ? 1 : 0.35)
           .scale({ x: this.pressScale('cal-next'), y: this.pressScale('cal-next') })
@@ -603,16 +619,16 @@ export struct CalendarPage {
 
       Row({ space: 6 }) {
         Text(this.rangeTitle())
-          .fontSize(11)
-          .fontColor($r('app.color.color_text_secondary'))
+          .fontSize(12)
+          .fontColor($r('app.color.cc_text_muted'))
         if (this.computing) {
           LoadingProgress()
             .width(12)
             .height(12)
-            .color($r('app.color.color_primary'))
+            .color($r('app.color.cc_primary'))
           Text('计算中…')
-            .fontSize(11)
-            .fontColor($r('app.color.color_text_secondary'))
+            .fontSize(12)
+            .fontColor($r('app.color.cc_text_muted'))
         }
       }
       .width('100%')
@@ -627,8 +643,8 @@ export struct CalendarPage {
     Row() {
       ForEach(WEEK_LABELS, (label: string) => {
         Text(label)
-          .fontSize(11)
-          .fontColor($r('app.color.color_text_secondary'))
+          .fontSize(12)
+          .fontColor($r('app.color.cc_text_muted'))
           .layoutWeight(1)
           .textAlign(TextAlign.Center)
       }, (label: string): string => label)
@@ -645,20 +661,20 @@ export struct CalendarPage {
           ForEach(week, (cell: CalCell) => {
             Column() {
               Text(String(cell.day))
-                .fontSize(13)
+                .fontSize(14)
                 .fontWeight(cell.isToday || this.isSelected(cell) ? FontWeight.Bold : FontWeight.Normal)
                 .fontColor(this.cellTextColor(cell))
                 .textAlign(TextAlign.Center)
                 .width(30)
                 .height(30)
-                .borderRadius(15)
+                .borderRadius(12)
                 .backgroundColor(cell.isToday ? '#40FFFFFF' : Color.Transparent)
             }
             .layoutWeight(1)
             .height(46)
             .justifyContent(FlexAlign.Center)
             .borderRadius(8)
-            .backgroundColor(this.isSelected(cell) ? $r('app.color.color_card') : Color.Transparent)
+            .backgroundColor(this.isSelected(cell) ? $r('app.color.cc_card') : Color.Transparent)
             .onClick((): void => {
               this.selectDay(cell)
             })
@@ -676,15 +692,15 @@ export struct CalendarPage {
 
   private cellTextColor(cell: CalCell): ResourceColor {
     if (this.isSelected(cell)) {
-      return $r('app.color.color_primary');
+      return $r('app.color.cc_primary');
     }
     if (cell.isToday) {
-      return $r('app.color.color_primary');
+      return $r('app.color.cc_primary');
     }
     if (!cell.inMonth) {
       return '#5A6B80';
     }
-    return $r('app.color.color_text');
+    return $r('app.color.cc_text_title');
   }
 
   @Builder
@@ -694,25 +710,25 @@ export struct CalendarPage {
         Text(this.dayTitle())
           .fontSize(14)
           .fontWeight(FontWeight.Bold)
-          .fontColor($r('app.color.color_text'))
+          .fontColor($r('app.color.cc_text_title'))
         Blank()
         Text(this.daySummary())
-          .fontSize(11)
-          .fontColor($r('app.color.color_text_secondary'))
+          .fontSize(12)
+          .fontColor($r('app.color.cc_text_muted'))
       }
       .width('100%')
 
       if (!this.hasData()) {
         Text('卫星数据加载中…')
           .fontSize(12)
-          .fontColor($r('app.color.color_text_secondary'))
+          .fontColor($r('app.color.cc_text_muted'))
           .width('100%')
           .padding({ top: 20, bottom: 20 })
           .textAlign(TextAlign.Center)
       } else if (!this.hasSelection()) {
         Text('请在“卫星”标签页选择要跟踪的卫星')
           .fontSize(12)
-          .fontColor($r('app.color.color_text_secondary'))
+          .fontColor($r('app.color.cc_text_muted'))
           .width('100%')
           .padding({ top: 20, bottom: 20 })
           .textAlign(TextAlign.Center)
@@ -722,7 +738,7 @@ export struct CalendarPage {
           ? '正在计算…'
           : (this.inForecast(this.selectedMillis) ? '当日暂无达标过境' : '该日期超出预报范围'))
           .fontSize(12)
-          .fontColor($r('app.color.color_text_secondary'))
+          .fontColor($r('app.color.cc_text_muted'))
           .width('100%')
           .padding({ top: 20, bottom: 20 })
           .textAlign(TextAlign.Center)
@@ -734,21 +750,21 @@ export struct CalendarPage {
                 Circle({ width: 8, height: 8 }).fill(cp.color)
                 Column({ space: 2 }) {
                   Text(cp.name)
-                    .fontSize(13)
+                    .fontSize(14)
                     .fontWeight(FontWeight.Medium)
                     .fontColor(cp.color)
                     .maxLines(1)
                     .textOverflow({ overflow: TextOverflow.Ellipsis })
                   Text(`NORAD ${cp.catnum}`)
-                    .fontSize(10)
-                    .fontColor($r('app.color.color_text_secondary'))
+                    .fontSize(12)
+                    .fontColor($r('app.color.cc_text_muted'))
                 }
                 .alignItems(HorizontalAlign.Start)
                 .layoutWeight(1)
 
                 Text(`${this.clock(cp.pass.aosTime)} - ${this.clock(cp.pass.losTime)}`)
                   .fontSize(12)
-                  .fontColor($r('app.color.color_text'))
+                  .fontColor($r('app.color.cc_text_title'))
                 Text(`最高 ${cp.pass.maxElevationDeg.toFixed(0)}°`)
                   .fontSize(12)
                   .fontWeight(FontWeight.Bold)
@@ -756,7 +772,7 @@ export struct CalendarPage {
               }
               .width('100%')
               .padding(10)
-              .backgroundColor($r('app.color.color_card'))
+              .backgroundColor($r('app.color.cc_card'))
               .borderRadius(8)
             }, (cp: CalPass): string => `${cp.catnum}-${cp.pass.aosTime}`)
           }

@@ -16,7 +16,7 @@ const K_SORT = 'settings_pass_sort';
 const K_STATION_VER = 'station_version';
 /** 站址是否由用户手动设置过：是则启动静默定位不再覆盖 */
 const K_STATION_MANUAL = 'station_manual';
-/** 自定义数据源 URL（空 = 使用内置镜像） */
+/** 自定义数据源 URL（空 = 使用内置离线数据） */
 const K_TLE_URL = 'settings_custom_tle_url';
 const K_TRANS_URL = 'settings_custom_transponder_url';
 /** 数据源使用情况：最近一次成功更新用的地址/时间，以及镜像、自定义地址各自最近成功时间 */
@@ -89,12 +89,18 @@ export class AppSettings {
     AppStorage.setOrCreate<number>(K_STATION_VER, AppSettings.getStationVersion() + 1);
   }
 
+  /** 恢复默认站址并清除"用户手动设定"标记（供"清除本机数据"使用）。 */
+  static resetStation(): void {
+    AppSettings.setStation(48.2, 16.37, 0);
+    AppStorage.setOrCreate<boolean>(K_STATION_MANUAL, false);
+  }
+
   /** 用户是否手动设定过站址。 */
   static isStationManual(): boolean {
     return AppStorage.get<boolean>(K_STATION_MANUAL) ?? false;
   }
 
-  /** 自定义 TLE 数据源；返回空串表示未设置（用内置镜像）。 */
+  /** 自定义 TLE 数据源；返回空串表示未设置（用内置离线数据）。 */
   static getCustomTleUrl(): string {
     return AppStorage.get<string>(K_TLE_URL) ?? '';
   }
@@ -114,7 +120,7 @@ export class AppSettings {
 
   // ---- 数据源使用情况（供设置页显示"当前模式 / 各自更新时间"）----
 
-  /** 记录一次成功更新：[isMirror]/[isCustom] 表示命中的是内置镜像还是用户自定义地址。
+  /** 记录一次成功更新：[isMirror]/[isCustom] 表示命中的是内置离线数据还是用户自定义地址。
    *  [timestamp] 传入 0 表示用当前时间；导入内置快照时用快照自带的抓取时间。 */
   static recordDataSourceResult(url: string, isMirror: boolean, isCustom: boolean, timestamp: number = 0): void {
     const now = timestamp > 0 ? timestamp : Date.now();

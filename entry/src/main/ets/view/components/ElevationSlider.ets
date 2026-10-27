@@ -35,9 +35,9 @@ export struct ElevationSlider {
   build() {
     Column({ space: 10 }) {
       Row() {
-        Text('最低过境仰角').fontSize(14).fontColor($r('app.color.color_text'))
+        Text('最低过境仰角').fontSize(14).fontColor($r('app.color.cc_text_title'))
         Blank()
-        Text(`${this.currentValue}°`).fontSize(14).fontColor($r('app.color.color_primary'))
+        Text(`${this.currentValue}°`).fontSize(14).fontColor($r('app.color.cc_accent_text'))
       }
       .width('100%')
 

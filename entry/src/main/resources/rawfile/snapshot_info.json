@@ -1,6 +1,6 @@
 {
-  "source": "https://tledata.xanyi.eu.org/tledata/all.txt",
-  "transponderSource": "https://tledata.xanyi.eu.org/tledata/trans.json",
+  "source": "内置离线数据",
+  "transponderSource": "内置离线数据",
   "fetchedAt": 1791031966225,
   "tleCount": 16771,
   "transponderCount": 5075,

@@ -9,6 +9,22 @@
       "value": "#0A59F7"
     },
     {
+      "name": "color_accent",
+      "value": "#538EF4"
+    },
+    {
+      "name": "color_accent_text",
+      "value": "#2A66C8"
+    },
+    {
+      "name": "color_on_accent",
+      "value": "#0B1220"
+    },
+    {
+      "name": "color_card_border",
+      "value": "#E5E7EB"
+    },
+    {
       "name": "color_bg",
       "value": "#F5F6FA"
     },
@@ -39,6 +55,25 @@
     {
       "name": "color_panel_data",
       "value": "#F9FAFC"
-    }
+    },
+    { "name": "cc_page_bg", "value": "#F8FAFC" },
+    { "name": "cc_card", "value": "#FFFFFF" },
+    { "name": "cc_border", "value": "#E5E7EB" },
+    { "name": "cc_border_hover", "value": "#E5E7EB" },
+    { "name": "cc_border_input", "value": "#D1D5DB" },
+    { "name": "cc_surface_muted", "value": "#F1F5F9" },
+    { "name": "cc_text_title", "value": "#111827" },
+    { "name": "cc_text_body", "value": "#374151" },
+    { "name": "cc_text_muted", "value": "#6B7280" },
+    { "name": "cc_text_placeholder", "value": "#9CA3AF" },
+    { "name": "cc_primary", "value": "#538EF4" },
+    { "name": "cc_primary_hover", "value": "#4A83EC" },
+    { "name": "cc_focus_ring", "value": "#7FADF8" },
+    { "name": "cc_on_primary", "value": "#0B1220" },
+    { "name": "cc_accent_text", "value": "#2A66C8" },
+    { "name": "cc_ring_offset", "value": "#FFFFFF" },
+    { "name": "cc_success", "value": "#16A34A" },
+    { "name": "cc_warning", "value": "#D97706" },
+    { "name": "cc_danger", "value": "#DC2626" }
   ]
 }

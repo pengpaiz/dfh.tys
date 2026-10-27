@@ -68,7 +68,7 @@ export struct PassProgressBar {
     Row({ space: 8 }) {
       if (this.showLabel) {
         Text('● 过境中')
-          .fontSize(11)
+          .fontSize(12)
           .fontWeight(FontWeight.Bold)
           .fontColor('#E6A23C')
       }
@@ -79,8 +79,8 @@ export struct PassProgressBar {
         .backgroundColor('#3D3D3D')
         .height(6)
       Text(`${Math.round(this.progress() * 100)}%`)
-        .fontSize(11)
-        .fontColor($r('app.color.color_text_secondary'))
+        .fontSize(12)
+        .fontColor($r('app.color.cc_text_muted'))
     }
     .width('100%')
   }
@@ -108,6 +108,8 @@ export struct PassesPage {
   @State nextPass: FlatPass | null = null;
   /** 视图状态：区分"加载中/有数据/确实为空" */
   @State viewState: PassViewState = PassViewState.LOADING;
+  /** 固定头高度（列表顶部据此预留），由 headerBar 实测 */
+  @State headerH: number = 120;
   /** 底部预留（由 Index 按栏高+导航条避让算出后发布） */
   @StorageProp(KEY_BAR_CLEARANCE) barClearance: number = TAB_BAR_CLEARANCE;
 
@@ -425,24 +427,36 @@ export struct PassesPage {
   }
 
   build() {
-    Column() {
-      this.headerBar()
-      // 三态显示：加载中 / 有数据 / 确实为空（"数据还没算完"不再冒充"无数据"）
-      if (this.viewState === PassViewState.READY) {
-        if (this.sortMode === PassSortMode.BY_SATELLITE) {
-          this.satelliteView()
+    Stack({ alignContent: Alignment.Top }) {
+      // 底层：列表（可滚入顶部区域，由上层固定头 + 渐隐条柔和覆盖）
+      Column() {
+        // 三态显示：加载中 / 有数据 / 确实为空（"数据还没算完"不再冒充"无数据"）
+        if (this.viewState === PassViewState.READY) {
+          if (this.sortMode === PassSortMode.BY_SATELLITE) {
+            this.satelliteView()
+          } else {
+            this.flatTimeView()
+          }
+        } else if (this.viewState === PassViewState.LOADING) {
+          this.loadingView()
         } else {
-          this.flatTimeView()
+          this.emptyView()
         }
-      } else if (this.viewState === PassViewState.LOADING) {
-        this.loadingView()
-      } else {
-        this.emptyView()
       }
+      .width('100%')
+      .height('100%')
+
+      // 上层：固定头 + 下方渐隐过渡（头部描边恒在最上层，不会被卡片压住）
+      Column() {
+        this.headerBar()
+        this.fadeBar()
+      }
+      .width('100%')
+      .zIndex(2)
     }
     .width('100%')
     .height('100%')
-    .backgroundColor($r('app.color.color_bg'))
+    .backgroundColor($r('app.color.cc_page_bg'))
     .bindSheet($$this.showDetail, this.detailSheetBuilder(), {
       detents: [SheetSize.LARGE],
       showClose: false
@@ -475,41 +489,54 @@ export struct PassesPage {
     return n;
   }
 
+  // 固定头下方的纯色叠层渐隐（非渐变图形）：卡片滑入时柔和淡出
+  @Builder
+  private fadeBar() {
+    Column() {
+      Column().width('100%').height(4).backgroundColor($r('app.color.cc_page_bg')).opacity(0.85)
+      Column().width('100%').height(4).backgroundColor($r('app.color.cc_page_bg')).opacity(0.62)
+      Column().width('100%').height(4).backgroundColor($r('app.color.cc_page_bg')).opacity(0.42)
+      Column().width('100%').height(4).backgroundColor($r('app.color.cc_page_bg')).opacity(0.24)
+      Column().width('100%').height(4).backgroundColor($r('app.color.cc_page_bg')).opacity(0.10)
+    }
+    .width('100%')
+  }
+
   @Builder
   private headerBar() {
     Column({ space: 8 }) {
       Row() {
-        Text('过境预报').fontSize(18).fontWeight(FontWeight.Bold).fontColor($r('app.color.color_text'))
+        Text('过境预报').fontSize(18).fontWeight(FontWeight.Bold).fontColor($r('app.color.cc_text_title'))
         Blank()
         Text(`仰角>=${this.minElevation}deg · ${this.windowHours}h · ${this.trackCount}星`)
-          .fontSize(11)
-          .fontColor($r('app.color.color_text_secondary'))
+          .fontSize(12)
+          .fontColor($r('app.color.cc_text_muted'))
       }
       .width('100%')
 
       Row({ space: 6 }) {
         Text('按卫星')
-          .fontSize(13)
+          .fontSize(14)
           .fontWeight(this.sortMode === PassSortMode.BY_SATELLITE ? FontWeight.Bold : FontWeight.Normal)
-          .fontColor(this.sortMode === PassSortMode.BY_SATELLITE ? '#FFFFFF' : $r('app.color.color_text_secondary'))
-          .backgroundColor(this.sortMode === PassSortMode.BY_SATELLITE ? $r('app.color.color_primary') : $r('app.color.color_card'))
-          .borderRadius(16)
+          .fontColor(this.sortMode === PassSortMode.BY_SATELLITE ? $r('app.color.cc_on_primary') : $r('app.color.cc_text_muted'))
+          .backgroundColor(this.sortMode === PassSortMode.BY_SATELLITE ? $r('app.color.cc_primary') : $r('app.color.cc_card'))
+          .borderRadius(12)
           .padding({ left: 16, right: 16, top: 5, bottom: 5 })
           .onClick((): void => {
             // 切换排列方式：胶囊着色的过渡 + 列表交叉转场都在同一动画里
-            this.getUIContext().animateTo({ duration: 320, curve: Curve.Friction }, (): void => {
+            this.getUIContext().animateTo({ duration: 200, curve: Curve.EaseOut }, (): void => {
               this.sortMode = PassSortMode.BY_SATELLITE
             });
           })
         Text('按时间')
-          .fontSize(13)
+          .fontSize(14)
           .fontWeight(this.sortMode === PassSortMode.BY_TIME ? FontWeight.Bold : FontWeight.Normal)
-          .fontColor(this.sortMode === PassSortMode.BY_TIME ? '#FFFFFF' : $r('app.color.color_text_secondary'))
-          .backgroundColor(this.sortMode === PassSortMode.BY_TIME ? $r('app.color.color_primary') : $r('app.color.color_card'))
-          .borderRadius(16)
+          .fontColor(this.sortMode === PassSortMode.BY_TIME ? $r('app.color.cc_on_primary') : $r('app.color.cc_text_muted'))
+          .backgroundColor(this.sortMode === PassSortMode.BY_TIME ? $r('app.color.cc_primary') : $r('app.color.cc_card'))
+          .borderRadius(12)
           .padding({ left: 16, right: 16, top: 5, bottom: 5 })
           .onClick((): void => {
-            this.getUIContext().animateTo({ duration: 320, curve: Curve.Friction }, (): void => {
+            this.getUIContext().animateTo({ duration: 200, curve: Curve.EaseOut }, (): void => {
               this.sortMode = PassSortMode.BY_TIME
             });
           })
@@ -521,8 +548,8 @@ export struct PassesPage {
           Row({ space: 8 }) {
             Circle({ width: 8, height: 8 }).fill(this.nextPass.color)
             Text('下次过境')
-              .fontSize(11)
-              .fontColor($r('app.color.color_text_secondary'))
+              .fontSize(12)
+              .fontColor($r('app.color.cc_text_muted'))
             Text(this.nextPass.name)
               .fontSize(12)
               .fontWeight(FontWeight.Medium)
@@ -533,43 +560,49 @@ export struct PassesPage {
             Text(this.countdownText(this.nextPass.pass.aosTime))
               .fontSize(12)
               .fontWeight(FontWeight.Bold)
-              .fontColor($r('app.color.color_primary'))
+              .fontColor($r('app.color.cc_accent_text'))
           }
           .width('100%')
 
           // 更详细的信息：起止时刻 + 各自方位角、最高仰角、时长、卫星高度
           Row({ space: 12 }) {
             Text(`AOS ${this.clock(this.nextPass.pass.aosTime)} · 方位 ${this.nextPass.pass.aosAzimuth.toFixed(0)}°`)
-              .fontSize(11)
-              .fontColor($r('app.color.color_text_secondary'))
+              .fontSize(12)
+              .fontColor($r('app.color.cc_text_muted'))
             Text(`LOS ${this.clock(this.nextPass.pass.losTime)} · 方位 ${this.nextPass.pass.losAzimuth.toFixed(0)}°`)
-              .fontSize(11)
-              .fontColor($r('app.color.color_text_secondary'))
+              .fontSize(12)
+              .fontColor($r('app.color.cc_text_muted'))
           }
           .width('100%')
 
           Row({ space: 12 }) {
             Text(`最高仰角 ${this.nextPass.pass.maxElevationDeg.toFixed(0)}°`)
-              .fontSize(11)
-              .fontColor($r('app.color.color_text'))
+              .fontSize(12)
+              .fontColor($r('app.color.cc_text_title'))
             Text(`持续 ${Math.round(this.nextPass.pass.durationMillis / 60000)} min`)
-              .fontSize(11)
-              .fontColor($r('app.color.color_text_secondary'))
+              .fontSize(12)
+              .fontColor($r('app.color.cc_text_muted'))
             Text(`星高 ${this.nextPass.pass.altitudeKm.toFixed(0)} km`)
-              .fontSize(11)
-              .fontColor($r('app.color.color_text_secondary'))
+              .fontSize(12)
+              .fontColor($r('app.color.cc_text_muted'))
           }
           .width('100%')
         }
         .width('100%')
         .alignItems(HorizontalAlign.Start)
         .padding({ left: 10, right: 10, top: 8, bottom: 8 })
-        .backgroundColor($r('app.color.color_card'))
+        .backgroundColor($r('app.color.cc_card'))
         .borderRadius(8)
+        .border({ width: 1, color: $r('app.color.cc_border'), radius: 8 })
       }
     }
     .width('100%')
-    .padding({ left: 14, right: 14, top: 12, bottom: 6 })
+    // 固定头不透明且贴住下方内容：避免列表上拉回弹时露出缝隙
+    .backgroundColor($r('app.color.cc_page_bg'))
+    .padding({ left: 14, right: 14, top: 12, bottom: 0 })
+    .onAreaChange((_o: Area, n: Area): void => {
+      this.headerH = Number(n.height);
+    })
   }
 
   @Builder
@@ -578,10 +611,10 @@ export struct PassesPage {
       LoadingProgress()
         .width(26)
         .height(26)
-        .color($r('app.color.color_primary'))
+        .color($r('app.color.cc_primary'))
       Text('正在加载卫星数据…')
-        .fontSize(13)
-        .fontColor($r('app.color.color_text_secondary'))
+        .fontSize(14)
+        .fontColor($r('app.color.cc_text_muted'))
     }
     .layoutWeight(1)
     .width('100%')
@@ -592,11 +625,11 @@ export struct PassesPage {
   private emptyView() {
     Column({ space: 10 }) {
       Text('暂无过境数据')
-        .fontSize(15)
-        .fontColor($r('app.color.color_text'))
+        .fontSize(14)
+        .fontColor($r('app.color.cc_text_title'))
       Text('请在“卫星”标签页点选要跟踪的卫星')
-        .fontSize(13)
-        .fontColor($r('app.color.color_text_secondary'))
+        .fontSize(14)
+        .fontColor($r('app.color.cc_text_muted'))
         .textAlign(TextAlign.Center)
     }
     .layoutWeight(1)
@@ -608,17 +641,25 @@ export struct PassesPage {
   private satelliteView() {
     Scroll() {
       Column({ space: 14 }) {
-        ForEach(this.groups, (g: PassSat) => {
+        if (this.visibleGroups().length === 0) {
+          Text('预测窗口内暂无过境')
+            .fontSize(12)
+            .fontColor($r('app.color.cc_text_muted'))
+            .width('100%')
+        }
+        ForEach(this.visibleGroups(), (g: PassSat) => {
           this.satCard(g)
         }, (g: PassSat): string => {
           return String(g.catnum)
         })
       }
       .width('100%')
-      .padding({ left: 14, right: 14, top: 14, bottom: this.barClearance })
+      .padding({ left: 14, right: 14, top: this.headerH + 10, bottom: this.barClearance })
     }
     .layoutWeight(1)
     .width('100%')
+    // 禁止上拉回弹：避免边缘拉伸导致固定头下方出现缝隙
+    .edgeEffect(EdgeEffect.None)
     // 排列方式切换：整体交叉淡入 + 上浮
     .transition(TransitionEffect.OPACITY.combine(TransitionEffect.translate({ y: 12 })))
   }
@@ -626,20 +667,24 @@ export struct PassesPage {
   @Builder
   private flatTimeView() {
     Scroll() {
-      Column({ space: 10 }) {
-        ForEach(this.flatPasses, (f: FlatPass) => {
-          if (this.passVisible(f.pass)) {
-            this.flatRow(f)
-          }
-        }, (f: FlatPass): string => {
-          return `${f.catnum}-${f.pass.aosTime}`
-        })
+      Column({ space: 16 }) {
+        if (this.dayOffsets().length === 0) {
+          Text('预测窗口内暂无过境')
+            .fontSize(12)
+            .fontColor($r('app.color.cc_text_muted'))
+            .width('100%')
+        }
+        ForEach(this.dayOffsets(), (off: number) => {
+          this.timeModule(off)
+        }, (off: number): string => `day-${off}`)
       }
       .width('100%')
-      .padding({ left: 14, right: 14, top: 14, bottom: this.barClearance })
+      .padding({ left: 14, right: 14, top: this.headerH + 10, bottom: this.barClearance })
     }
     .layoutWeight(1)
     .width('100%')
+    // 禁止上拉回弹：避免边缘拉伸导致固定头下方出现缝隙
+    .edgeEffect(EdgeEffect.None)
     // 排列方式切换：整体交叉淡入 + 上浮
     .transition(TransitionEffect.OPACITY.combine(TransitionEffect.translate({ y: 12 })))
   }
@@ -649,25 +694,23 @@ export struct PassesPage {
     Column({ space: 8 }) {
       Row({ space: 8 }) {
         Text(g.name)
-          .fontSize(15)
+          .fontSize(14)
           .fontWeight(FontWeight.Bold)
-          .fontColor($r('app.color.color_text'))
+          .fontColor($r('app.color.cc_text_title'))
           .layoutWeight(1)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
         if (this.satInPass(g.passes)) {
           // 正在过境：卡片标题旁给一个醒目徽标
           Text('● 过境中')
-            .fontSize(11)
+            .fontSize(12)
             .fontWeight(FontWeight.Bold)
-            .fontColor($r('app.color.color_primary'))
+            .fontColor($r('app.color.cc_accent_text'))
             .padding({ left: 6, right: 6, top: 1, bottom: 1 })
-            .borderRadius(6)
+            .borderRadius(8)
             .borderWidth(1)
-            .borderColor($r('app.color.color_primary'))
+            .borderColor($r('app.color.cc_primary'))
         }
         Text(`NORAD ${g.catnum}`)
-          .fontSize(11)
+          .fontSize(12)
           .fontColor(g.color as ResourceColor)
       }
       .width('100%')
@@ -675,7 +718,7 @@ export struct PassesPage {
       if (this.countVisible(g.passes) === 0) {
         Text(`近 ${this.windowHours}h 无达标过境`)
           .fontSize(12)
-          .fontColor($r('app.color.color_text_secondary'))
+          .fontColor($r('app.color.cc_text_muted'))
           .width('100%')
       } else {
         ForEach(g.passes, (p: SatPassEvent) => {
@@ -689,44 +732,47 @@ export struct PassesPage {
     }
     .width('100%')
     .padding(14)
-    .backgroundColor($r('app.color.color_card'))
-    .borderRadius(12)
-    // 正在过境的卫星卡片描边强调
-    .borderWidth(this.satInPass(g.passes) ? 1.5 : 0)
-    .borderColor($r('app.color.color_primary'))
+    .backgroundColor($r('app.color.cc_card'))
+    .border({
+      width: this.satInPass(g.passes) ? 1.5 : 1,
+      color: this.satInPass(g.passes) ? $r('app.color.cc_primary') : $r('app.color.cc_border'),
+      radius: 12
+    })
     .alignItems(HorizontalAlign.Start)
   }
 
   @Builder
   private passRow(catnum: number, p: SatPassEvent, color: string) {
     Column({ space: 6 }) {
+      // 行 1：日期 + AOS 时间 + 最高仰角
+      Row({ space: 8 }) {
+        Text(this.dateLabel(p.aosTime))
+          .fontSize(12)
+          .fontColor(color as ResourceColor)
+        Text(this.clock(p.aosTime))
+          .fontSize(14)
+          .fontWeight(FontWeight.Bold)
+          .fontColor($r('app.color.cc_text_title'))
+        Blank()
+        Text(`${p.maxElevationDeg.toFixed(0)}°`)
+          .fontSize(14)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(color as ResourceColor)
+      }
+      .width('100%')
+
+      // 行 2：LOS + 时长 + 方位
       Row({ space: 10 }) {
-        Column({ space: 2 }) {
-          Text(this.dateLabel(p.aosTime))
-            .fontSize(12)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(color as ResourceColor)
-          Text(`AOS ${this.clock(p.aosTime)} → LOS ${this.clock(p.losTime)}`)
-            .fontSize(12)
-            .fontColor($r('app.color.color_text'))
-        }
-        .alignItems(HorizontalAlign.Start)
-        .layoutWeight(1)
-
-        Column({ space: 2 }) {
-          Text(`最高 ${p.maxElevationDeg.toFixed(0)}°`)
-            .fontSize(13)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(color as ResourceColor)
-          Text(`时长 ${Math.round(p.durationMillis / 60000)} min`)
-            .fontSize(11)
-            .fontColor($r('app.color.color_text_secondary'))
-        }
-        .alignItems(HorizontalAlign.End)
-
-        Text('>')
-          .fontSize(18)
-          .fontColor($r('app.color.color_text_secondary'))
+        Text(`LOS ${this.clock(p.losTime)}`)
+          .fontSize(12)
+          .fontColor($r('app.color.cc_text_title'))
+        Text(`时长 ${Math.round(p.durationMillis / 60000)} min`)
+          .fontSize(12)
+          .fontColor($r('app.color.cc_text_body'))
+          .layoutWeight(1)
+        Text(`AZ ${p.aosAzimuth.toFixed(0)}→${p.losAzimuth.toFixed(0)}°`)
+          .fontSize(12)
+          .fontColor($r('app.color.cc_text_body'))
       }
       .width('100%')
 
@@ -740,12 +786,13 @@ export struct PassesPage {
       }
     }
     .width('100%')
-    .padding(10)
-    .backgroundColor($r('app.color.color_bg'))
-    .borderRadius(8)
-    // 正在过境的这一条：描边 + 更亮的主色强调
-    .borderWidth(this.isInPass(p) ? 1.5 : 0)
-    .borderColor($r('app.color.color_primary'))
+    .padding({ left: 10, right: 10, top: 6, bottom: 6 })
+    .backgroundColor($r('app.color.cc_page_bg'))
+    .border({
+      width: this.isInPass(p) ? 1.5 : 0,
+      color: $r('app.color.cc_primary'),
+      radius: 8
+    })
     .onClick((): void => {
       this.openDetail(catnum, p, color)
     })
@@ -754,35 +801,40 @@ export struct PassesPage {
   @Builder
   private flatRow(f: FlatPass) {
     Column({ space: 6 }) {
+      // 行 1：颜色圆点 + 卫星名（用该卫星独有色）+ 最高仰角
+      Row({ space: 6 }) {
+        Column()
+          .width(8)
+          .height(8)
+          .borderRadius(4)
+          .backgroundColor(f.color as ResourceColor)
+        Text(f.name)
+          .fontSize(14)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(f.color as ResourceColor)
+          .layoutWeight(1)
+        Text(`${f.pass.maxElevationDeg.toFixed(0)}°`)
+          .fontSize(14)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(f.color as ResourceColor)
+      }
+      .width('100%')
+
+      // 行 2：AOS → LOS（完整显示）
+      Text(`AOS ${this.clock(f.pass.aosTime)} → LOS ${this.clock(f.pass.losTime)}`)
+        .fontSize(12)
+        .fontColor($r('app.color.cc_text_title'))
+        .width('100%')
+
+      // 行 3：时长 + 方位
       Row({ space: 10 }) {
-        Column({ space: 2 }) {
-          Text(this.dateLabel(f.pass.aosTime))
-            .fontSize(12)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(f.color as ResourceColor)
-          Text(`${f.name}`)
-            .fontSize(12)
-            .fontColor($r('app.color.color_text'))
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-        }
-        .alignItems(HorizontalAlign.Start)
-        .layoutWeight(1)
-
-        Column({ space: 2 }) {
-          Text(this.clock(f.pass.aosTime))
-            .fontSize(14)
-            .fontWeight(FontWeight.Bold)
-            .fontColor($r('app.color.color_text'))
-          Text(`最高 ${f.pass.maxElevationDeg.toFixed(0)}°`)
-            .fontSize(11)
-            .fontColor(f.color as ResourceColor)
-        }
-        .alignItems(HorizontalAlign.End)
-
-        Text('>')
-          .fontSize(18)
-          .fontColor($r('app.color.color_text_secondary'))
+        Text(`时长 ${Math.round(f.pass.durationMillis / 60000)} min`)
+          .fontSize(12)
+          .fontColor($r('app.color.cc_text_body'))
+          .layoutWeight(1)
+        Text(`AZ ${f.pass.aosAzimuth.toFixed(0)}→${f.pass.losAzimuth.toFixed(0)}°`)
+          .fontSize(12)
+          .fontColor($r('app.color.cc_text_body'))
       }
       .width('100%')
 
@@ -796,29 +848,107 @@ export struct PassesPage {
       }
     }
     .width('100%')
-    .padding(12)
-    .backgroundColor($r('app.color.color_card'))
-    .borderRadius(10)
-    // 正在过境的这一条：描边强调
-    .borderWidth(this.isInPass(f.pass) ? 1.5 : 0)
-    .borderColor($r('app.color.color_primary'))
+    .padding({ left: 10, right: 10, top: 8, bottom: 8 })
+    .backgroundColor($r('app.color.cc_page_bg'))
+    .border({
+      width: this.isInPass(f.pass) ? 1.5 : 0,
+      color: $r('app.color.cc_primary'),
+      radius: 8
+    })
     .onClick((): void => {
       this.openDetail(f.catnum, f.pass, f.color)
     })
   }
 
-  private dateLabel(millis: number): string {
+  /** 该时间戳相对今天的天数差（0=今天，1=明天，2=后天，…） */
+  private dayDiff(millis: number): number {
     const d = new Date(millis);
     const today = new Date();
     const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
     const startOfPass = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-    const dayDiff = Math.round((startOfPass - startOfToday) / 86400000);
+    return Math.round((startOfPass - startOfToday) / 86400000);
+  }
+
+  /** 按日期取过境分组：offset 0/1/2 = 今天/明天/后天（只取通过筛选的） */
+  private dayList(offset: number): FlatPass[] {
+    const out: FlatPass[] = [];
+    for (let i = 0; i < this.flatPasses.length; i++) {
+      const f = this.flatPasses[i];
+      if (this.passVisible(f.pass) && this.dayDiff(f.pass.aosTime) === offset) {
+        out.push(f);
+      }
+    }
+    return out;
+  }
+
+  /** 按卫星视图：只保留窗口内有可见过境的卫星（没有记录的不显示） */
+  private visibleGroups(): PassSat[] {
+    const out: PassSat[] = [];
+    for (let i = 0; i < this.groups.length; i++) {
+      if (this.countVisible(this.groups[i].passes) > 0) {
+        out.push(this.groups[i]);
+      }
+    }
+    return out;
+  }
+
+  /** 需要显示的日期偏移（0=今天）：限定在预测窗口内，且**该天必须有过境记录**，否则不出现 */
+  private dayOffsets(): number[] {
+    const endMs = Date.now() + this.windowHours * 3600000;
+    const maxOff = Math.max(0, this.dayDiff(endMs));
+    const out: number[] = [];
+    for (let i = 0; i <= maxOff; i++) {
+      if (this.dayList(i).length > 0) {
+        out.push(i);
+      }
+    }
+    return out;
+  }
+
+  /** 模块标题：相对称呼 + 具体日期，如「今天 10月26日」 */
+  private dayTitle(off: number): string {
+    const d = new Date(Date.now() + off * 86400000);
+    const dateStr = `${d.getMonth() + 1}月${d.getDate()}日`;
     let rel = '';
-    if (dayDiff === 0) {
+    if (off === 0) {
       rel = '今天';
-    } else if (dayDiff === 1) {
+    } else if (off === 1) {
       rel = '明天';
-    } else if (dayDiff === 2) {
+    } else if (off === 2) {
+      rel = '后天';
+    } else {
+      rel = `${off} 天后`;
+    }
+    return `${rel} ${dateStr}`;
+  }
+
+  @Builder
+  private timeModule(off: number) {
+    Column({ space: 8 }) {
+      Text(this.dayTitle(off))
+        .fontSize(14)
+        .fontWeight(FontWeight.Bold)
+        .fontColor($r('app.color.cc_text_title'))
+        .width('100%')
+      ForEach(this.dayList(off), (f: FlatPass) => {
+        this.flatRow(f)
+      }, (f: FlatPass): string => `${f.catnum}-${f.pass.aosTime}`)
+    }
+    .width('100%')
+    .padding(12)
+    .backgroundColor($r('app.color.cc_card'))
+    .border({ width: 1, color: $r('app.color.cc_border'), radius: 12 })
+  }
+
+  private dateLabel(millis: number): string {
+    const d = new Date(millis);
+    const diff = this.dayDiff(millis);
+    let rel = '';
+    if (diff === 0) {
+      rel = '今天';
+    } else if (diff === 1) {
+      rel = '明天';
+    } else if (diff === 2) {
       rel = '后天';
     }
     const dateStr = `${d.getMonth() + 1}月${d.getDate()}日`;

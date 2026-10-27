@@ -3,29 +3,18 @@
  * Held in AppStorage so tab1 (satellites) and tab2 (passes) stay in sync.
  */
 
-import { ISS_CATNUM } from './SatelliteApp';
-
 const CATS_KEY = 'selected_cats';
 const VERSION_KEY = 'selected_version';
-const SEEDED_KEY = 'selected_seeded';
 
 export class SelectedSats {
-  static init(forceDefault: boolean = false): void {
+  /**
+   * 只恢复持久化状态，首启不预置任何卫星。
+   * 若默认选中某颗星（如 ISS），用户一进应用就能看到"已有过境/观测数据"，
+   * 会被当成预置测试数据，因此选择集必须从空开始、由用户自行点选。
+   */
+  static init(): void {
     PersistentStorage.persistProp(CATS_KEY, new Array<number>());
     PersistentStorage.persistProp(VERSION_KEY, 0);
-    PersistentStorage.persistProp(SEEDED_KEY, false);
-    if (forceDefault) {
-      AppStorage.setOrCreate<number[]>(CATS_KEY, [ISS_CATNUM]);
-      AppStorage.setOrCreate<number>(VERSION_KEY, 1);
-      AppStorage.setOrCreate<boolean>(SEEDED_KEY, true);
-      return;
-    }
-    const seeded = AppStorage.get<boolean>(SEEDED_KEY) ?? false;
-    if (!seeded) {
-      AppStorage.setOrCreate<boolean>(SEEDED_KEY, true);
-      AppStorage.setOrCreate<number[]>(CATS_KEY, [ISS_CATNUM]);
-      AppStorage.setOrCreate<number>(VERSION_KEY, 1);
-    }
   }
 
   static getCats(): number[] {

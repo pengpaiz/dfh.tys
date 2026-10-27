@@ -2,10 +2,9 @@
  * Look4Sat. Amateur radio satellite tracker and pass predictor.
  * HarmonyOS data layer: 卫星/转发器数据下载。
  *
- * 更新渠道只有两个（按顺序）：
- *   1) 用户在设置里填的自定义 URL（可选）
- *   2) 内置镜像（国内加速镜像）
- * 不再使用 Celestrak 等第三方源。
+ * 本应用为「离线优先 / 单机」：内置快照即开即用，默认不联网。
+ * 只有在设置里填写了自定义数据源地址、并由用户手动触发更新时才会发起网络请求。
+ * 不含任何内置/默认远程地址。
  */
 
 import { http } from '@kit.NetworkKit';
@@ -15,15 +14,12 @@ import { SatOrbitalData } from '../../domain/predict/OrbitalData';
 import { SatRadio } from '../../domain/model/SatRadio';
 import { bytesToString } from '../../common/utils/TextUtils';
 
-export const CN_TLE_URL = 'https://tledata.xanyi.eu.org/tledata/all.txt';
-export const CN_TRANSPONDER_URL = 'https://tledata.xanyi.eu.org/tledata/trans.json';
-
 export class SatelliteDownloadResult {
   dataList: SatOrbitalData[];
   count: number;
   /** 本次数据实际来自哪个地址（用于在设置页显示"当前使用的源"） */
   sourceUrl: string;
-  /** 本次尝试中，用户自定义地址是否失败（失败后会回退内置镜像） */
+  /** 用户自定义地址本次是否失败（用于设置页展示自定义源的成功/失败） */
   customFailed: boolean;
 
   constructor(dataList: SatOrbitalData[], sourceUrl: string = '', customFailed: boolean = false) {
@@ -47,46 +43,20 @@ export class TransponderDownloadResult {
 export class SatelliteDownloader {
   private parser: SatDataParser = new SatDataParser();
 
-  /** Download satellites from the domestic accelerated mirror (all.txt, TLE 3-line). */
-  async downloadFromMirror(url: string = CN_TLE_URL): Promise<SatelliteDownloadResult> {
-    const text = await this.fetchText(url);
-    const list = this.parser.parseTLEStream(text);
-    return new SatelliteDownloadResult(list, url);
-  }
-
   /**
-   * 按顺序尝试下载：自定义 URL（用户填了才用）→ 内置镜像。
-   * 任一源返回非空即成功；全部失败抛出最后一个错误。
+   * 只使用用户自定义地址下载。
+   * 未配置地址时直接抛错（不联网）——本应用可离线使用，联网更新是可选项。
    */
   async downloadWithFallback(customUrl: string = ''): Promise<SatelliteDownloadResult> {
-    const sources: string[] = [];
     const custom = customUrl.trim();
-    if (custom.length > 0) {
-      sources.push(custom);
+    if (custom.length === 0) {
+      throw new Error('no-source');
     }
-    sources.push(CN_TLE_URL);
-    let lastError: Error | null = null;
-    let customFailed = false;
-    for (let i = 0; i < sources.length; i++) {
-      const isCustomSource = custom.length > 0 && sources[i] === custom;
-      try {
-        const result = await this.downloadAuto(sources[i]);
-        if (result.count > 0) {
-          result.customFailed = customFailed;
-          return result;
-        }
-        lastError = new Error(`empty result: ${sources[i]}`);
-        if (isCustomSource) {
-          customFailed = true;
-        }
-      } catch (e) {
-        lastError = e instanceof Error ? e : new Error(String(e));
-        if (isCustomSource) {
-          customFailed = true;
-        }
-      }
+    const result = await this.downloadAuto(custom);
+    if (result.count === 0) {
+      throw new Error(`empty result: ${custom}`);
     }
-    throw lastError !== null ? lastError : new Error('all sources failed');
+    return result;
   }
 
   /** 判断 URL 是否可下载的 HTTP(S) 地址。 */
@@ -138,9 +108,13 @@ export class SatelliteDownloader {
     return new TransponderDownloadResult(this.parser.parseTransponderJSON(text));
   }
 
-  /** Download transponder data from the domestic accelerated mirror (trans.json). */
-  async downloadTransponders(url: string = CN_TRANSPONDER_URL): Promise<TransponderDownloadResult> {
-    const text = await this.fetchText(url);
+  /** 下载转发器数据：同样只使用用户自定义地址，未配置则不联网。 */
+  async downloadTransponders(url: string): Promise<TransponderDownloadResult> {
+    const target = url.trim();
+    if (target.length === 0) {
+      throw new Error('no-source');
+    }
+    const text = await this.fetchText(target);
     const list = this.parser.parseTransponderJSON(text);
     return new TransponderDownloadResult(list);
   }

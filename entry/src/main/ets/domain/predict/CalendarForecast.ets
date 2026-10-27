@@ -120,7 +120,11 @@ export class CalendarForecast {
     let passes: SatPassEvent[] = [];
     try {
       const obj: SatOrbitalObject = createOrbitalObject(satData);
-      passes = this.finder.getPasses(obj, station, now, CAL_FORECAST_DAYS * 24);
+      // 窗口起点对齐到「当天零点」：签名按天失效，若仍以预热时刻为起点，
+      // 同一自然日内起点会随预热时刻漂移，缓存数据逐渐陈旧（含已过去的过境）。
+      const d = new Date(now);
+      const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+      passes = this.finder.getPasses(obj, station, dayStart, CAL_FORECAST_DAYS * 24);
     } catch (e) {
       passes = [];
     }

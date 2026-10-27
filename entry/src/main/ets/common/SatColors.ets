@@ -1,6 +1,6 @@
 /*
  * Look4Sat. Shared satellite palette.
- * Deliberately avoids the app theme blue (#0A59F7) and other UI accents
+ * Deliberately avoids the app theme blue (#538EF4) and other UI accents
  * (footprint blue, live yellow, station/track red) so satellite markers
  * stay clearly distinguishable from UI elements.
  * 也不使用偏黄的橙黄/土黄（#F39C12/#D4AC0D 之类）：在过境/日历列表里

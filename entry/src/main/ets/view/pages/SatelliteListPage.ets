@@ -3,11 +3,12 @@ import { SatelliteDataSource } from '../../data/storage/SatelliteStore';
 import { SatOrbitalData } from '../../domain/predict/OrbitalData';
 import { promptAction } from '@kit.ArkUI';
 import { ISS_CATNUM } from '../../common/SatelliteApp';
+import { AppSettings } from '../../common/AppSettings';
+import { SatelliteDownloader } from '../../data/downloader/SatelliteDownloader';
 import { SelectedSats } from '../../common/SelectedSats';
 import { Favorites } from '../../common/Favorites';
 import { ENTER_SCALE, PRESS_IN_MS, PRESS_OUT_MS, PRESS_SCALE } from '../components/PressFx';
 import { KEY_BAR_CLEARANCE, TAB_BAR_CLEARANCE } from '../../common/LayoutMetrics';
-import { immersiveThinMaterial } from '../../common/SystemMaterial';
 
 /** 查询串是否纯数字：只有纯数字才需要比 NORAD 编号。 */
 function isDigits(q: string): boolean {
@@ -61,7 +62,9 @@ export struct SatelliteListPage {
 
   aboutToAppear(): void {
     this.reloadAll();
-    if (this.app.getStore().getAll().length === 0) {
+    // 无本地数据时由 Index 的 startupOfflineSeed 负责从内置快照离线播种；
+    // 这里只在用户配置了自定义数据源地址时才自动联网更新（默认离线优先，不静默联网）。
+    if (this.app.getStore().getAll().length === 0 && SatelliteDownloader.isUsableUrl(AppSettings.getCustomTleUrl())) {
       this.doAutoDownload();
     }
   }
@@ -178,7 +181,7 @@ export struct SatelliteListPage {
    */
   private toggleSelected(catnum: number): void {
     const wasSelected = this.selectedSet.has(catnum);
-    this.getUIContext().animateTo({ duration: 320, curve: Curve.Friction }, (): void => {
+    this.getUIContext().animateTo({ duration: 200, curve: Curve.EaseOut }, (): void => {
       this.suppressRefresh = true;
       SelectedSats.toggle(catnum);
       this.moveRowIncremental(catnum, wasSelected);
@@ -344,7 +347,7 @@ export struct SatelliteListPage {
         if (this.selectedCount === 0 && this.unselectedCount === 0) {
           Column({ space: 12 }) {
             Text($r('app.string.empty_hint'))
-              .fontColor($r('app.color.color_text_secondary'))
+              .fontColor($r('app.color.cc_text_muted'))
               .fontSize(14)
               .textAlign(TextAlign.Center)
             Button('下载数据')
@@ -401,7 +404,7 @@ export struct SatelliteListPage {
       }
       .width('100%')
       .height('100%')
-      .backgroundColor($r('app.color.color_bg'))
+      .backgroundColor($r('app.color.cc_page_bg'))
 
       // 右下角圆形悬浮按钮
       this.floatingButtons()
@@ -427,14 +430,14 @@ export struct SatelliteListPage {
   private favSheetBuilder() {
     Column({ space: 10 }) {
       Text(`收藏夹（${this.favList.length}）`)
-        .fontSize(15)
+        .fontSize(14)
         .fontWeight(FontWeight.Bold)
-        .fontColor($r('app.color.color_text'))
+        .fontColor($r('app.color.cc_text_title'))
 
       if (this.favList.length === 0) {
         Text('还没有收藏：点列表每行右侧的星标即可收藏')
-          .fontSize(13)
-          .fontColor($r('app.color.color_text_secondary'))
+          .fontSize(14)
+          .fontColor($r('app.color.cc_text_muted'))
           .width('100%')
           .padding({ top: 20, bottom: 20 })
           .textAlign(TextAlign.Center)
@@ -445,17 +448,17 @@ export struct SatelliteListPage {
               Row({ space: 8 }) {
                 Column({ space: 2 }) {
                   Text(this.nameMain(this.favName(catnum)))
-                    .fontSize(13)
+                    .fontSize(14)
                     .fontWeight(FontWeight.Medium)
-                    .fontColor($r('app.color.color_text'))
+                    .fontColor($r('app.color.cc_text_title'))
                     .maxLines(2)
                     .wordBreak(WordBreak.BREAK_WORD)
                     .textOverflow({ overflow: TextOverflow.Ellipsis })
                   if (this.nameParen(this.favName(catnum)).length > 0) {
                     Text(this.nameParen(this.favName(catnum)))
-                      .fontSize(13)
+                      .fontSize(14)
                       .fontWeight(FontWeight.Medium)
-                      .fontColor($r('app.color.color_text'))
+                      .fontColor($r('app.color.cc_text_title'))
                       .maxLines(1)
                       .minFontSize(8)
                       .maxFontSize(13)
@@ -463,15 +466,15 @@ export struct SatelliteListPage {
                       .textOverflow({ overflow: TextOverflow.Ellipsis })
                   }
                   Text(`NORAD ${catnum}`)
-                    .fontSize(11)
-                    .fontColor($r('app.color.color_text_secondary'))
+                    .fontSize(12)
+                    .fontColor($r('app.color.cc_text_muted'))
                 }
                 .layoutWeight(1)
                 .alignItems(HorizontalAlign.Start)
 
                 // 直接在这里加入/移出「已选择」
                 Toggle({ type: ToggleType.Switch, isOn: this.isSelectedLocal(catnum) })
-                  .selectedColor($r('app.color.color_primary'))
+                  .selectedColor($r('app.color.cc_primary'))
                   .onChange((isOn: boolean): void => {
                     if (isOn !== this.isSelectedLocal(catnum)) {
                       this.toggleSelected(catnum)
@@ -481,7 +484,7 @@ export struct SatelliteListPage {
                 // 收藏星标：取消后本行仍保留（只切换图标状态），关闭面板再打开才刷新列表
                 SymbolGlyph(this.isFavoriteLocal(catnum) ? $r('sys.symbol.star_fill') : $r('sys.symbol.star'))
                   .fontSize(18)
-                  .fontColor([this.isFavoriteLocal(catnum) ? $r('app.color.color_primary') : $r('app.color.color_text_secondary')])
+                  .fontColor([this.isFavoriteLocal(catnum) ? $r('app.color.cc_accent_text') : $r('app.color.cc_text_muted')])
                   .padding(6)
                   .onClick((): void => {
                     Favorites.toggle(catnum)
@@ -489,7 +492,7 @@ export struct SatelliteListPage {
               }
               .width('100%')
               .padding(8)
-              .backgroundColor($r('app.color.color_card'))
+              .backgroundColor($r('app.color.cc_card'))
               .borderRadius(8)
             }
           }, (catnum: number): string => String(catnum))
@@ -507,16 +510,16 @@ export struct SatelliteListPage {
   private searchSheetBuilder() {
     Column({ space: 10 }) {
       Text('搜索卫星并选择要跟踪的')
-        .fontSize(15)
+        .fontSize(14)
         .fontWeight(FontWeight.Bold)
-        .fontColor($r('app.color.color_text'))
+        .fontColor($r('app.color.cc_text_title'))
 
       Row({ space: 8 }) {
         TextInput({ placeholder: '搜索名称或 NORAD 编号', text: this.searchQuery })
           .layoutWeight(1)
           .height(36)
           .borderRadius(8)
-          .fontSize(13)
+          .fontSize(14)
           .onChange((value: string): void => {
             this.searchQuery = value;
             this.applySearchQuery();
@@ -526,8 +529,8 @@ export struct SatelliteListPage {
 
       if (this.searchResults.length === 0) {
         Text('输入关键词搜索卫星')
-          .fontSize(13)
-          .fontColor($r('app.color.color_text_secondary'))
+          .fontSize(14)
+          .fontColor($r('app.color.cc_text_muted'))
           .width('100%')
           .padding({ top: 20, bottom: 20 })
           .textAlign(TextAlign.Center)
@@ -538,17 +541,17 @@ export struct SatelliteListPage {
               Row({ space: 8 }) {
                 Column({ space: 2 }) {
                   Text(this.nameMain(s.name))
-                    .fontSize(13)
+                    .fontSize(14)
                     .fontWeight(FontWeight.Medium)
-                    .fontColor($r('app.color.color_text'))
+                    .fontColor($r('app.color.cc_text_title'))
                     .maxLines(2)
                     .wordBreak(WordBreak.BREAK_WORD)
                     .textOverflow({ overflow: TextOverflow.Ellipsis })
                   if (this.nameParen(s.name).length > 0) {
                     Text(this.nameParen(s.name))
-                      .fontSize(13)
+                      .fontSize(14)
                       .fontWeight(FontWeight.Medium)
-                      .fontColor($r('app.color.color_text'))
+                      .fontColor($r('app.color.cc_text_title'))
                       .maxLines(1)
                       .minFontSize(8)
                       .maxFontSize(13)
@@ -556,14 +559,14 @@ export struct SatelliteListPage {
                       .textOverflow({ overflow: TextOverflow.Ellipsis })
                   }
                   Text(`NORAD ${s.catnum}`)
-                    .fontSize(11)
-                    .fontColor($r('app.color.color_text_secondary'))
+                    .fontSize(12)
+                    .fontColor($r('app.color.cc_text_muted'))
                 }
                 .layoutWeight(1)
                 .alignItems(HorizontalAlign.Start)
 
                 Toggle({ type: ToggleType.Switch, isOn: this.isSelectedLocal(s.catnum) })
-                  .selectedColor($r('app.color.color_primary'))
+                  .selectedColor($r('app.color.cc_primary'))
                   .onChange((isOn: boolean): void => {
                     if (isOn !== this.isSelectedLocal(s.catnum)) {
                       this.toggleSelected(s.catnum)
@@ -572,7 +575,7 @@ export struct SatelliteListPage {
               }
               .width('100%')
               .padding(8)
-              .backgroundColor($r('app.color.color_card'))
+              .backgroundColor($r('app.color.cc_card'))
               .borderRadius(8)
             }
           }, (s: SatOrbitalData): string => {
@@ -598,7 +601,7 @@ export struct SatelliteListPage {
     .alignItems(HorizontalAlign.End)
     .margin({ right: 14, bottom: this.barClearance })
     .onAppear((): void => {
-      this.getUIContext().animateTo({ duration: 320, curve: Curve.Friction }, (): void => {
+      this.getUIContext().animateTo({ duration: 200, curve: Curve.EaseOut }, (): void => {
         this.btnEntered = true;
       });
     })
@@ -610,17 +613,16 @@ export struct SatelliteListPage {
     Column({ space: 3 }) {
       Column() {
         SymbolGlyph(icon)
-          .fontSize(20)
-          .fontColor([$r('app.color.color_primary')])
+          .fontSize(18)
+          .fontColor([$r('app.color.cc_accent_text')])
       }
       .width(48)
       .height(48)
-      .borderRadius(24)
+      .borderRadius(12)
       .justifyContent(FlexAlign.Center)
       .alignItems(HorizontalAlign.Center)
-      .backgroundColor($r('app.color.color_card'))
-      .backgroundBlurStyle(BlurStyle.Thin)
-      .systemMaterial(immersiveThinMaterial())
+      .backgroundColor($r('app.color.cc_card'))
+      .border({ width: 1, color: $r('app.color.cc_border'), radius: 12 })
       .shadow({ radius: 12, color: '#26000000', offsetY: 3 })
       .opacity(0.94)
       .scale({ x: this.pressScale(`fab-${action}`), y: this.pressScale(`fab-${action}`) })
@@ -640,7 +642,7 @@ export struct SatelliteListPage {
           this.openSearch()
         }
       })
-      Text(labelTxt).fontSize(9).fontColor($r('app.color.color_text_secondary'))
+      Text(labelTxt).fontSize(12).fontColor($r('app.color.cc_text_muted'))
     }
     .alignItems(HorizontalAlign.Center)
   }
@@ -649,16 +651,16 @@ export struct SatelliteListPage {
   private sectionHeader(title: string, count: number) {
     Row({ space: 6 }) {
       Text(title)
-        .fontSize(13)
+        .fontSize(14)
         .fontWeight(FontWeight.Bold)
-        .fontColor($r('app.color.color_text'))
+        .fontColor($r('app.color.cc_text_title'))
       Text(`${count}`)
         .fontSize(12)
-        .fontColor($r('app.color.color_text_secondary'))
+        .fontColor($r('app.color.cc_text_muted'))
     }
     .width('100%')
     .padding({ left: 4, right: 4, top: 10, bottom: 6 })
-    .backgroundColor($r('app.color.color_bg'))
+    .backgroundColor($r('app.color.cc_page_bg'))
   }
 
   @Builder
@@ -666,9 +668,9 @@ export struct SatelliteListPage {
     Row({ space: 12 }) {
       Column() {
         Text(this.nameMain(item.name))
-          .fontSize(15)
+          .fontSize(14)
           .fontWeight(FontWeight.Medium)
-          .fontColor($r('app.color.color_text'))
+          .fontColor($r('app.color.cc_text_title'))
           // 主体字号固定；过长时换行（按词换行，中文按字）
           .maxLines(2)
           .wordBreak(WordBreak.BREAK_WORD)
@@ -676,9 +678,9 @@ export struct SatelliteListPage {
         if (this.nameParen(item.name).length > 0) {
           // 括号段单独一行：若仍放不下，自动缩小字号直到完整显示
           Text(this.nameParen(item.name))
-            .fontSize(15)
+            .fontSize(14)
             .fontWeight(FontWeight.Medium)
-            .fontColor($r('app.color.color_text'))
+            .fontColor($r('app.color.cc_text_title'))
             .maxLines(1)
             .minFontSize(8)
             .maxFontSize(15)
@@ -687,14 +689,14 @@ export struct SatelliteListPage {
         }
         Text(`NORAD ${item.catnum}`)
           .fontSize(12)
-          .fontColor($r('app.color.color_text_secondary'))
+          .fontColor($r('app.color.cc_text_muted'))
           .margin({ top: 3 })
       }
       .layoutWeight(1)
       .alignItems(HorizontalAlign.Start)
 
       Toggle({ type: ToggleType.Switch, isOn: this.isSelectedLocal(item.catnum) })
-        .selectedColor($r('app.color.color_primary'))
+        .selectedColor($r('app.color.cc_primary'))
         .onChange((isOn: boolean): void => {
           if (isOn !== this.isSelectedLocal(item.catnum)) {
             this.toggleSelected(item.catnum)
@@ -703,8 +705,8 @@ export struct SatelliteListPage {
 
       // 收藏星标（在选择开关之后）
       SymbolGlyph(this.isFavoriteLocal(item.catnum) ? $r('sys.symbol.star_fill') : $r('sys.symbol.star'))
-        .fontSize(20)
-        .fontColor([this.isFavoriteLocal(item.catnum) ? $r('app.color.color_primary') : $r('app.color.color_text_secondary')])
+        .fontSize(18)
+        .fontColor([this.isFavoriteLocal(item.catnum) ? $r('app.color.cc_accent_text') : $r('app.color.cc_text_muted')])
         .padding(6)
         .onClick((): void => {
           Favorites.toggle(item.catnum)
@@ -715,8 +717,8 @@ export struct SatelliteListPage {
     }
     .width('100%')
     .padding(14)
-    .backgroundColor($r('app.color.color_card'))
     .borderRadius(12)
+      .border({ width: 1, color: $r('app.color.cc_border'), radius: 12 })
     // 共享元素转场：同一颗星在「未选择」消失、「已选择」出现时按位置插值飞行
     .geometryTransition(`sat-${item.catnum}`)
     .transition(TransitionEffect.OPACITY)
@@ -767,11 +769,11 @@ export struct SatelliteListPage {
 
   private onBtnTouch(key: string, event: TouchEvent): void {
     if (event.type === TouchType.Down) {
-      this.getUIContext().animateTo({ duration: PRESS_IN_MS, curve: Curve.Friction }, (): void => {
+      this.getUIContext().animateTo({ duration: PRESS_IN_MS, curve: Curve.EaseOut }, (): void => {
         this.pressedBtn = key;
       });
     } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
-      this.getUIContext().animateTo({ duration: PRESS_OUT_MS, curve: Curve.Friction }, (): void => {
+      this.getUIContext().animateTo({ duration: PRESS_OUT_MS, curve: Curve.EaseOut }, (): void => {
         if (this.pressedBtn === key) {
           this.pressedBtn = '';
         }

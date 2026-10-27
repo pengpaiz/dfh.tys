@@ -323,8 +323,22 @@ export class SatelliteStore {
       const path = `${this.context.filesDir}/${TRANSPONDER_FILE}`;
       const file = fs.openSync(path, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);
       try {
-        const buffer = stringToBytes(this.serializeTransponders());
-        fs.writeSync(file.fd, buffer.buffer);
+        // 与卫星数据一样分片序列化 + 分片写入并让帧，避免上万条转发器一次性 stringify+写盘卡住主线程。
+        const total = this.transponders.length;
+        let start = 0;
+        while (start < total) {
+          const end = Math.min(total, start + SAVE_CHUNK_ROWS);
+          const lines: string[] = [];
+          for (let i = start; i < end; i++) {
+            lines.push(this.serializeTransponderOne(this.transponders[i]));
+          }
+          const buffer = stringToBytes(`${lines.join('\n')}\n`);
+          fs.writeSync(file.fd, buffer.buffer);
+          start = end;
+          if (start < total) {
+            await SatelliteStore.yieldFrame();
+          }
+        }
       } finally {
         fs.closeSync(file);
       }
@@ -333,18 +347,14 @@ export class SatelliteStore {
     }
   }
 
-  private serializeTransponders(): string {
-    const lines: string[] = [];
-    for (let i = 0; i < this.transponders.length; i++) {
-      const t = this.transponders[i];
-      lines.push(JSON.stringify({
-        'uuid': t.uuid, 'description': t.info, 'alive': t.isAlive,
-        'downlink_low': t.downlinkLow, 'downlink_high': t.downlinkHigh, 'mode': t.downlinkMode,
-        'uplink_low': t.uplinkLow, 'uplink_high': t.uplinkHigh, 'uplink_mode': t.uplinkMode,
-        'invert': t.isInverted, 'norad_cat_id': t.catnum
-      }));
-    }
-    return lines.join('\n');
+  /** 单条转发器序列化（分片保存时逐条调用） */
+  private serializeTransponderOne(t: SatRadio): string {
+    return JSON.stringify({
+      'uuid': t.uuid, 'description': t.info, 'alive': t.isAlive,
+      'downlink_low': t.downlinkLow, 'downlink_high': t.downlinkHigh, 'mode': t.downlinkMode,
+      'uplink_low': t.uplinkLow, 'uplink_high': t.uplinkHigh, 'uplink_mode': t.uplinkMode,
+      'invert': t.isInverted, 'norad_cat_id': t.catnum
+    });
   }
 
   private serialize(list: SatOrbitalData[]): string {

@@ -74,7 +74,7 @@ export class SatDataParser {
   }
 
   private parseTransponderRow(row: TransponderRow): SatRadio | null {
-    if (row['uuid'] === undefined && row['uuid'] === null) {
+    if (row['uuid'] === undefined || row['uuid'] === null) {
       return null;
     }
     const uuid: string = typeof row['uuid'] === 'string' ? row['uuid'] as string : '';

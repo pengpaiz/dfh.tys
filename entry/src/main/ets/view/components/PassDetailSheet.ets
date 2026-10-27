@@ -250,19 +250,19 @@ export struct PassDetailSheet {
       // 圆形录音按钮：录制中显示停止图标 + 红色底
       Column() {
         SymbolGlyph(this.recActive ? $r('sys.symbol.stop_circle_fill') : $r('sys.symbol.mic_fill'))
-          .fontSize(22)
+          .fontSize(18)
           .fontColor([Color.White])
       }
       .width(44)
       .height(44)
-      .borderRadius(22)
+      .borderRadius(12)
       .justifyContent(FlexAlign.Center)
       .alignItems(HorizontalAlign.Center)
-      .backgroundColor(this.recActive ? '#E53935' : $r('app.color.color_primary'))
+      .backgroundColor(this.recActive ? '#E53935' : $r('app.color.cc_primary'))
       .scale({ x: this.recPressed ? 0.9 : 1, y: this.recPressed ? 0.9 : 1 })
       .onTouch((event: TouchEvent): void => {
         const down = event.type === TouchType.Down;
-        this.getUIContext().animateTo({ duration: down ? 120 : 320, curve: Curve.Friction }, (): void => {
+        this.getUIContext().animateTo({ duration: down ? 120 : 320, curve: Curve.EaseOut }, (): void => {
           this.recPressed = down;
         });
       })
@@ -274,10 +274,10 @@ export struct PassDetailSheet {
         Text(this.recActive ? '录音中' : '录音')
           .fontSize(14)
           .fontWeight(FontWeight.Medium)
-          .fontColor(this.recActive ? '#E53935' : $r('app.color.color_text'))
+          .fontColor(this.recActive ? '#E53935' : $r('app.color.cc_text_title'))
         Text(this.recHintText())
-          .fontSize(11)
-          .fontColor($r('app.color.color_text_secondary'))
+          .fontSize(12)
+          .fontColor($r('app.color.cc_text_muted'))
           .maxLines(2)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
       }
@@ -286,8 +286,8 @@ export struct PassDetailSheet {
     }
     .width('100%')
     .padding(10)
-    .backgroundColor($r('app.color.color_card'))
-    .borderRadius(14)
+    .borderRadius(12)
+      .border({ width: 1, color: $r('app.color.cc_border'), radius: 12 })
   }
 
   onFreqSourceChanged(): void {
@@ -413,6 +413,8 @@ export struct PassDetailSheet {
     const src = this.detail.freqGroups;
     const views: FreqGroupView[] = [];
     const now = Date.now();
+    // 所有转发器行都用同一时刻的多普勒，位置只算一次（此前每行各算一次，转发器多时浪费明显）
+    const pos = this.orbital !== null ? this.orbital.getFullPosition(this.station, now) : null;
     for (let i = 0; i < src.length; i++) {
       const blocks: FreqTxView[] = [];
       for (let j = 0; j < src[i].blocks.length; j++) {
@@ -421,8 +423,7 @@ export struct PassDetailSheet {
         for (let k = 0; k < b.rows.length; k++) {
           const r = b.rows[k];
           let dopText = r.rawText;
-          if (r.hasValue && this.orbital !== null) {
-            const pos = this.orbital.getFullPosition(this.station, now);
+          if (r.hasValue && pos !== null) {
             const low = r.isDownlink ? pos.getDownlinkFreq(r.rawLowHz) : pos.getUplinkFreq(r.rawLowHz);
             const high = r.isDownlink ? pos.getDownlinkFreq(r.rawHighHz) : pos.getUplinkFreq(r.rawHighHz);
             dopText = fmtRange(low, high);
@@ -481,9 +482,9 @@ export struct PassDetailSheet {
     Column({ space: 18 }) {
       Row({ space: 8 }) {
         Text(this.detail.name)
-          .fontSize(17)
+          .fontSize(18)
           .fontWeight(FontWeight.Bold)
-          .fontColor($r('app.color.color_text'))
+          .fontColor($r('app.color.cc_text_title'))
           .layoutWeight(1)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -513,7 +514,7 @@ export struct PassDetailSheet {
         .width('100%')
         .padding(10)
         .backgroundColor($r('app.color.color_panel_radar'))
-        .borderRadius(14)
+        .borderRadius(12)
 
       // 录音：贴在雷达正下方（不遮挡雷达绘制），把通联音频录到本机
       this.recordBar()
@@ -528,7 +529,7 @@ export struct PassDetailSheet {
         // 预留右侧滚动条宽度，避免悬浮滚动条压住右对齐的频率数值
         .padding({ left: 12, right: 20, top: 12, bottom: 12 })
         .backgroundColor($r('app.color.color_panel_data'))
-        .borderRadius(14)
+        .borderRadius(12)
       }
       .layoutWeight(1)
       .width('100%')
@@ -572,13 +573,13 @@ export struct PassDetailSheet {
   @Builder
   private statBox(label: string, value: string) {
     Column({ space: 3 }) {
-      Text(label).fontSize(11).fontColor($r('app.color.color_text_secondary'))
-      Text(value).fontSize(14).fontWeight(FontWeight.Medium).fontColor($r('app.color.color_text'))
+      Text(label).fontSize(12).fontColor($r('app.color.cc_text_muted'))
+      Text(value).fontSize(14).fontWeight(FontWeight.Medium).fontColor($r('app.color.cc_text_title'))
     }
     .width('100%')
     .alignItems(HorizontalAlign.Start)
     .padding(10)
-    .backgroundColor($r('app.color.color_bg'))
+    .backgroundColor($r('app.color.cc_page_bg'))
     .borderRadius(8)
   }
 
@@ -587,31 +588,31 @@ export struct PassDetailSheet {
     Column({ space: 10 }) {
       Row() {
         Text('收发频率')
-          .fontSize(13)
+          .fontSize(14)
           .fontWeight(FontWeight.Bold)
-          .fontColor($r('app.color.color_text'))
+          .fontColor($r('app.color.cc_text_title'))
         Blank()
         Text('多普勒每 5s 刷新')
-          .fontSize(11)
-          .fontColor($r('app.color.color_text_secondary'))
+          .fontSize(12)
+          .fontColor($r('app.color.cc_text_muted'))
       }
       .width('100%')
 
       if (!this.detail.hasTransponders) {
         Text('暂无转发器数据（可从“国内数据下载”获取）')
           .fontSize(12)
-          .fontColor($r('app.color.color_text_secondary'))
+          .fontColor($r('app.color.cc_text_muted'))
       } else {
         Row({ space: 6 }) {
-          Text('链路').fontSize(11).fontColor($r('app.color.color_text_secondary')).width(64)
+          Text('链路').fontSize(12).fontColor($r('app.color.cc_text_muted')).width(64)
           Text('原始 (MHz)')
-            .fontSize(11)
-            .fontColor($r('app.color.color_text_secondary'))
+            .fontSize(12)
+            .fontColor($r('app.color.cc_text_muted'))
             .layoutWeight(1)
             .textAlign(TextAlign.End)
           Text('多普勒 (MHz)')
-            .fontSize(11)
-            .fontColor($r('app.color.color_text_secondary'))
+            .fontSize(12)
+            .fontColor($r('app.color.cc_text_muted'))
             .layoutWeight(1)
             .textAlign(TextAlign.End)
         }
@@ -620,27 +621,27 @@ export struct PassDetailSheet {
         ForEach(this.freqView, (g: FreqGroupView) => {
           Column({ space: 6 }) {
             Text(g.mode)
-              .fontSize(13)
+              .fontSize(14)
               .fontWeight(FontWeight.Bold)
-              .fontColor($r('app.color.color_primary'))
+              .fontColor($r('app.color.cc_accent_text'))
             ForEach(g.blocks, (blk: FreqTxView) => {
               Column({ space: 2 }) {
                 Text(blk.title)
-                  .fontSize(11)
-                  .fontColor($r('app.color.color_text_secondary'))
+                  .fontSize(12)
+                  .fontColor($r('app.color.cc_text_muted'))
                   .maxLines(1)
                   .textOverflow({ overflow: TextOverflow.Ellipsis })
                 ForEach(blk.rows, (r: FreqRowView) => {
                   Row({ space: 6 }) {
-                    Text(r.dir).fontSize(12).fontColor($r('app.color.color_text_secondary')).width(64)
+                    Text(r.dir).fontSize(12).fontColor($r('app.color.cc_text_muted')).width(64)
                     Text(r.rawText)
                       .fontSize(12)
-                      .fontColor(r.hasValue ? $r('app.color.color_text') : $r('app.color.color_text_secondary'))
+                      .fontColor(r.hasValue ? $r('app.color.cc_text_title') : $r('app.color.cc_text_muted'))
                       .layoutWeight(1)
                       .textAlign(TextAlign.End)
                     Text(r.dopText)
                       .fontSize(12)
-                      .fontColor(r.hasValue ? $r('app.color.color_primary') : $r('app.color.color_text_secondary'))
+                      .fontColor(r.hasValue ? $r('app.color.cc_accent_text') : $r('app.color.cc_text_muted'))
                       .layoutWeight(1)
                       .textAlign(TextAlign.End)
                   }
@@ -658,8 +659,8 @@ export struct PassDetailSheet {
     }
     .width('100%')
     .padding(12)
-    .backgroundColor($r('app.color.color_card'))
-    .borderRadius(10)
+    .backgroundColor($r('app.color.cc_card'))
+    .borderRadius(8)
     .alignItems(HorizontalAlign.Start)
   }
 
@@ -674,7 +675,7 @@ export struct PassDetailSheet {
         Blank()
         Text(`${Math.round(this.liveProgress * 100)}%`)
           .fontSize(12)
-          .fontColor($r('app.color.color_text_secondary'))
+          .fontColor($r('app.color.cc_text_muted'))
       }
       .width('100%')
 
@@ -686,32 +687,32 @@ export struct PassDetailSheet {
     }
     .width('100%')
     .padding(12)
-    .backgroundColor($r('app.color.color_card'))
-    .borderRadius(10)
+    .backgroundColor($r('app.color.cc_card'))
+    .borderRadius(8)
   }
 
   @Builder
   private passTimesRow() {
     Row({ space: 8 }) {
       Column({ space: 2 }) {
-        Text('AOS（捕获）').fontSize(11).fontColor($r('app.color.color_text_secondary'))
+        Text('AOS（捕获）').fontSize(12).fontColor($r('app.color.cc_text_muted'))
         Text(`${this.dateLabel(this.detail.aosTime)} ${this.clock(this.detail.aosTime)}`)
-          .fontSize(13)
+          .fontSize(14)
           .fontWeight(FontWeight.Medium)
-          .fontColor($r('app.color.color_text'))
+          .fontColor($r('app.color.cc_text_title'))
       }
       Blank()
       Column({ space: 2 }) {
-        Text('LOS（消失）').fontSize(11).fontColor($r('app.color.color_text_secondary'))
+        Text('LOS（消失）').fontSize(12).fontColor($r('app.color.cc_text_muted'))
         Text(`${this.dateLabel(this.detail.losTime)} ${this.clock(this.detail.losTime)}`)
-          .fontSize(13)
+          .fontSize(14)
           .fontWeight(FontWeight.Medium)
-          .fontColor($r('app.color.color_text'))
+          .fontColor($r('app.color.cc_text_title'))
       }
     }
     .width('100%')
     .padding(12)
-    .backgroundColor($r('app.color.color_card'))
-    .borderRadius(10)
+    .backgroundColor($r('app.color.cc_card'))
+    .borderRadius(8)
   }
 }
