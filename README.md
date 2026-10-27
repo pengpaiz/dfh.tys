@@ -118,18 +118,6 @@ CSV/TLE/3LE 由 `FORMAT` 决定（`FORMAT=csv` / `tle` / `3le`）。
 2. https://r4uab.ru/transmitters.json
    来源：r4uab｜格式：JSON
 
----
-
-#### 三、其它相关接口（不属于“卫星/接收器”数据更新，列出备查）
-
-- https://www.amsat.org/status/api/v1/catalog.php
-  AMSAT 状态目录（卫星“可用性/状态”页）
-- https://www.amsat.org/status/api/v1/reports.php?hours={小时}&limit={条数}
-  读取 AMSAT 状态报告
-- POST https://www.amsat.org/status/api/v1/reports.php
-  提交 AMSAT 状态报告
-
----
 
 #### 四、本项目（dfh.tys）的更新规则（1.1.0 起）
 
