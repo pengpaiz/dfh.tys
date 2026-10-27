@@ -27,5 +27,7 @@ build-profile.local.json5
      *.keystore                                                                                                                                                           
      *.cer                                                                                                                                                                
      *.p7b                                                                                                                                                                
-     build-profile.local.json5                                                                                                                                            
+     build-profile.local.json5
+*.ets linguist-language=TypeScript
+tools/** linguist-vendored
                                 
