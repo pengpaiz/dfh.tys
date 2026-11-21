@@ -1,0 +1,80 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "module description"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "description"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "轨览"
+    },
+    {
+      "name": "list_title",
+      "value": "卫星列表"
+    },
+    {
+      "name": "detail_title",
+      "value": "卫星详情"
+    },
+    {
+      "name": "settings_title",
+      "value": "站址设置"
+    },
+    {
+      "name": "btn_download",
+      "value": "国内数据下载"
+    },
+    {
+      "name": "btn_import",
+      "value": "导入文件"
+    },
+    {
+      "name": "btn_refresh",
+      "value": "刷新"
+    },
+    {
+      "name": "search_hint",
+      "value": "搜索名称或 NORAD 编号"
+    },
+    {
+      "name": "empty_hint",
+      "value": "暂无卫星数据，请先下载或导入"
+    },
+    {
+      "name": "station_latitude",
+      "value": "纬度"
+    },
+    {
+      "name": "station_longitude",
+      "value": "经度"
+    },
+    {
+      "name": "station_altitude",
+      "value": "海拔 (m)"
+    },
+    {
+      "name": "station_qth",
+      "value": "QTH 定位器"
+    },
+    {
+      "name": "btn_save",
+      "value": "保存"
+    },
+    {
+      "name": "saved_toast",
+      "value": "站址已保存"
+    },
+    {
+      "name": "reason_location",
+      "value": "用于读取您的当前位置作为卫星过境预测的观测站坐标。"
+    },
+    {
+      "name": "reason_microphone",
+      "value": "用于在过境详情页录制通联音频，录音仅保存在本机。"
+    }
+  ]
+}

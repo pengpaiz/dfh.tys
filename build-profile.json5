@@ -1,59 +1,89 @@
-/*
- * 开源仓库配置：这里**不包含任何签名材料**（证书/私钥/口令都不入库）。
- * 本机运行前请在 DevEco Studio 里自行配置签名：
- *   File → Project Structure → Signing Configs → 勾选 Automatically generate signature
- * （IDE 会把 signingConfigs 写回本文件，请勿把带口令的版本提交到仓库。）
- */
 {
-  app: {
-    products: [
+  "app": {
+    "signingConfigs": [
       {
-        name: 'default',
-        targetSdkVersion: '26.0.0',
-        compatibleSdkVersion: '6.1.1(24)',
-        runtimeOS: 'HarmonyOS',
-        buildOption: {
-          strictMode: {
-            caseSensitiveCheck: true,
-            useNormalizedOHMUrl: true,
-          },
-        },
+        "name": "default",
+        "type": "HarmonyOS",
+        "material": {
+          "certpath": "C:/Users/pengp/.ohos/config/default_MyApplication2_czQB1eJopmloxLwLzBWtesgYe4ClrHvm9z7Q66sdD6Q=.cer",
+          "keyAlias": "debugKey",
+          "keyPassword": "0000001AE55EB382202915C70C9D5680ACCFA3207C8B8D35914C7D49A4BDCF12EEAF1E48F7E117993DF9",
+          "profile": "C:/Users/pengp/.ohos/config/default_MyApplication2_czQB1eJopmloxLwLzBWtesgYe4ClrHvm9z7Q66sdD6Q=.p7b",
+          "signAlg": "SHA256withECDSA",
+          "storeFile": "C:/Users/pengp/.ohos/config/default_MyApplication2_czQB1eJopmloxLwLzBWtesgYe4ClrHvm9z7Q66sdD6Q=.p12",
+          "storePassword": "0000001AF1947D374A397B5042A159D1161574B5D5409A16BCCAF421B1D1CAD481DE4236936A04A1B6DC"
+        }
       },
       {
-        name: 'release',
-        targetSdkVersion: '26.0.0',
-        compatibleSdkVersion: '6.1.1(24)',
-        runtimeOS: 'HarmonyOS',
-        buildOption: {
-          strictMode: {
-            caseSensitiveCheck: true,
-            useNormalizedOHMUrl: true,
-          },
-        },
-      },
+        "name": "re",
+        "type": "HarmonyOS",
+        "material": {
+          "certpath": "D:/helpto/key/dfh.cer",
+          "keyAlias": "dfh",
+          "keyPassword": "00000019912549042A799F026C4112F2C356C8DE565649F0A543CFA7525AE622C045C3DD9500D0B2AC",
+          "profile": "D:/helpto/key/dfhRelease.p7b",
+          "signAlg": "SHA256withECDSA",
+          "storeFile": "D:/helpto/key/dfh.p12",
+          "storePassword": "0000001957A4A095E6A5E2321A9ED8E8AA0AF248A67E3898AAC71578E46FC032D0703346729FE6D4DE"
+        }
+      }
     ],
-    buildModeSet: [
+    "products": [
       {
-        name: 'debug',
+        "name": "default",
+        "signingConfig": "default",
+        "targetSdkVersion": "26.0.0",
+        "compatibleSdkVersion": "26.0.0",
+        "runtimeOS": "HarmonyOS",
+        "buildOption": {
+          "strictMode": {
+            "caseSensitiveCheck": true,
+            "useNormalizedOHMUrl": true
+          }
+        }
       },
       {
-        name: 'release',
-      },
+        "name": "release",
+        "signingConfig": "re",
+        "targetSdkVersion": "26.0.0",
+        "compatibleSdkVersion": "26.0.0",
+        "runtimeOS": "HarmonyOS",
+        "buildOption": {
+          "strictMode": {
+            "caseSensitiveCheck": true,
+            "useNormalizedOHMUrl": true
+          }
+        }
+      }
     ],
+    "buildModeSet": [
+      {
+        "name": "debug"
+      },
+      {
+        "name": "release"
+      }
+    ],
+    "capabilities": [
+      {
+        "bundleName": "dfh.tys.app",
+        "config": []
+      }
+    ]
   },
-  modules: [
+  "modules": [
     {
-      name: 'entry',
-      srcPath: './entry',
-      targets: [
+      "name": "entry",
+      "srcPath": "./entry",
+      "targets": [
         {
-          name: 'default',
-          applyToProducts: [
-            'default',
-            'release',
-          ],
-        },
-      ],
-    },
-  ],
+          "name": "default",
+          "applyToProducts": [
+            "default",
+            "release"
+          ]
+        }
+      ]
+    }
+  ]
 }
